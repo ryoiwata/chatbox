@@ -1,160 +1,236 @@
 ---
 name: electron
-description: "Build cross-platform desktop applications with Electron, covering main/renderer process architecture, IPC communication, BrowserWindow management, menus, tray icons, packaging, and security best practices. Use when the user asks about Electron, needs to create desktop applications, implement Electron features, or build cross-platform desktop apps."
-license: Complete terms in LICENSE.txt
+description: Automate Electron desktop apps (VS Code, Slack, Discord, Figma, Notion, Spotify, etc.) using agent-browser via Chrome DevTools Protocol. Use when the user needs to interact with an Electron app, automate a desktop app, connect to a running app, control a native app, or test an Electron application. Triggers include "automate Slack app", "control VS Code", "interact with Discord app", "test this Electron app", "connect to desktop app", or any task requiring automation of a native Electron application.
+allowed-tools: Bash(agent-browser:*), Bash(npx agent-browser:*)
 ---
 
-## When to use this skill
+# Electron App Automation
 
-Use this skill whenever the user wants to:
-- Build cross-platform desktop applications with Electron
-- Understand Electron architecture (main process, renderer process, preload)
-- Implement IPC (Inter-Process Communication) between processes
-- Create and manage BrowserWindow instances
-- Implement menus, tray icons, and native features
-- Package and distribute Electron applications
-- Use Electron Forge for project scaffolding and building
-- Debug and test Electron applications
-- Implement security best practices
-- Use Electron APIs (app, BrowserWindow, ipcMain, ipcRenderer, etc.)
+Automate any Electron desktop app using agent-browser. Electron apps are built on Chromium and expose a Chrome DevTools Protocol (CDP) port that agent-browser can connect to, enabling the same snapshot-interact workflow used for web pages.
 
-## How to use this skill
+## Core Workflow
 
-This skill is organized to match the Electron official documentation structure (https://www.electronjs.org/zh/docs/latest/, https://www.electronjs.org/zh/docs/latest/api/app). When working with Electron:
+1. **Launch** the Electron app with remote debugging enabled
+2. **Connect** agent-browser to the CDP port
+3. **Snapshot** to discover interactive elements
+4. **Interact** using element refs
+5. **Re-snapshot** after navigation or state changes
 
-1. **Identify the topic** from the user's request:
-   - Getting started/快速开始 → `examples/getting-started/installation.md` or `examples/getting-started/quick-start.md`
-   - Main process/主进程 → `examples/processes/main-process.md`
-   - Renderer process/渲染进程 → `examples/processes/renderer-process.md`
-   - IPC communication/IPC 通信 → `examples/processes/ipc-communication.md`
-   - BrowserWindow/窗口 → `examples/api/browser-window.md`
-   - Menu/菜单 → `examples/api/menu.md`
-   - Packaging/打包 → `examples/advanced/packaging.md`
-   - Security/安全 → `examples/advanced/security.md`
+```bash
+# Launch an Electron app with remote debugging
+open -a "Slack" --args --remote-debugging-port=9222
 
-2. **Load the appropriate example file** from the `examples/` directory:
+# Connect agent-browser to the app
+agent-browser connect 9222
 
-   **Getting Started (快速开始) - `examples/getting-started/`**:
-   - `examples/getting-started/installation.md` - Installing Electron and basic setup
-   - `examples/getting-started/quick-start.md` - Quick start tutorial
-
-   **Processes (进程) - `examples/processes/`**:
-   - `examples/processes/main-process.md` - Main process concepts and usage
-   - `examples/processes/renderer-process.md` - Renderer process concepts
-   - `examples/processes/preload-scripts.md` - Preload scripts usage
-   - `examples/processes/ipc-communication.md` - IPC communication patterns
-
-   **API Examples (API 示例) - `examples/api/`**:
-   - `examples/api/browser-window.md` - BrowserWindow usage
-   - `examples/api/menu.md` - Menu and context menu
-   - `examples/api/tray.md` - System tray
-   - `examples/api/dialog.md` - File dialogs
-   - `examples/api/ipc-main.md` - ipcMain usage
-   - `examples/api/ipc-renderer.md` - ipcRenderer usage
-
-   **Advanced (高级) - `examples/advanced/`**:
-   - `examples/advanced/packaging.md` - Application packaging
-   - `examples/advanced/security.md` - Security best practices
-   - `examples/advanced/auto-updater.md` - Auto updater
-   - `examples/advanced/native-modules.md` - Native modules
-
-   **Tools (工具) - `examples/tools/`**:
-   - `examples/tools/electron-forge.md` - Electron Forge usage
-   - `examples/tools/electron-fiddle.md` - Electron Fiddle usage
-
-3. **Follow the specific instructions** in that example file for syntax, structure, and best practices
-
-   **Important Notes**:
-   - All examples follow Electron latest API
-   - Examples use both CommonJS (require) and ES modules (import)
-   - Each example file includes key concepts, code examples, and key points
-   - Always check the example file for best practices and common patterns
-   - Electron supports Windows, macOS, and Linux
-
-4. **Reference API documentation** in the `api/` directory when needed:
-   - `api/app.md` - app module API
-   - `api/browser-window.md` - BrowserWindow API
-   - `api/ipc-main.md` - ipcMain API
-   - `api/ipc-renderer.md` - ipcRenderer API
-   - `api/menu.md` - Menu API
-   - `api/tray.md` - Tray API
-
-5. **Use templates** from the `templates/` directory:
-   - `templates/main-process.md` - Main process template
-   - `templates/preload-script.md` - Preload script template
-   - `templates/renderer-process.md` - Renderer process template
-   - `templates/package-json.md` - package.json template
-
-
-### Doc mapping (one-to-one with official documentation)
-
-- `examples/` → https://www.electronjs.org/zh/docs/latest/
-- `api/` → https://www.electronjs.org/zh/docs/latest/api/app
-
-## Quick Start Example
-
-```javascript
-// main.js
-const { app, BrowserWindow, ipcMain } = require('electron')
-const path = require('path')
-
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 800, height: 600,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,  // Security: always disable
-      contextIsolation: true    // Security: always enable
-    }
-  })
-  win.loadFile('index.html')
-}
-
-app.whenReady().then(createWindow)
-
-// IPC handler example
-ipcMain.handle('get-data', async () => {
-  return { message: 'Hello from main process' }
-})
+# Standard workflow from here
+agent-browser snapshot -i
+agent-browser click @e5
+agent-browser screenshot slack-desktop.png
 ```
 
-```javascript
-// preload.js
-const { contextBridge, ipcRenderer } = require('electron')
-contextBridge.exposeInMainWorld('api', {
-  getData: () => ipcRenderer.invoke('get-data')
-})
+## Launching Electron Apps with CDP
+
+Every Electron app supports the `--remote-debugging-port` flag since it's built into Chromium.
+
+### macOS
+
+```bash
+# Slack
+open -a "Slack" --args --remote-debugging-port=9222
+
+# VS Code
+open -a "Visual Studio Code" --args --remote-debugging-port=9223
+
+# Discord
+open -a "Discord" --args --remote-debugging-port=9224
+
+# Figma
+open -a "Figma" --args --remote-debugging-port=9225
+
+# Notion
+open -a "Notion" --args --remote-debugging-port=9226
+
+# Spotify
+open -a "Spotify" --args --remote-debugging-port=9227
 ```
 
-## API Reference (`api/`)
+### Linux
 
-- `api/app.md` - app module API
-- `api/browser-window.md` - BrowserWindow API
-- `api/ipc-main.md` / `api/ipc-renderer.md` - IPC APIs
-- `api/menu.md` / `api/tray.md` / `api/dialog.md` - UI APIs
+```bash
+slack --remote-debugging-port=9222
+code --remote-debugging-port=9223
+discord --remote-debugging-port=9224
+```
 
-## Best Practices
+### Windows
 
-1. **Security**: Never enable nodeIntegration in renderer process, use preload scripts
-2. **Process separation**: Keep main and renderer processes separate
-3. **IPC communication**: Use IPC for safe communication between processes
-4. **Resource management**: Properly clean up resources (windows, listeners)
-5. **Error handling**: Implement proper error handling and crash reporting
-6. **Performance**: Optimize for performance, use webContents for debugging
-7. **Packaging**: Use Electron Forge or electron-builder for packaging
-8. **Auto updates**: Implement auto-updater for production apps
-9. **Native modules**: Handle native module compatibility
-10. **Cross-platform**: Test on all target platforms
+```bash
+"C:\Users\%USERNAME%\AppData\Local\slack\slack.exe" --remote-debugging-port=9222
+"C:\Users\%USERNAME%\AppData\Local\Programs\Microsoft VS Code\Code.exe" --remote-debugging-port=9223
+```
 
-## Resources
+**Important:** If the app is already running, quit it first, then relaunch with the flag. The `--remote-debugging-port` flag must be present at launch time.
 
-- **Official Website**: https://www.electronjs.org/zh/
-- **Documentation**: https://www.electronjs.org/zh/docs/latest/
-- **API Reference**: https://www.electronjs.org/zh/docs/latest/api/app
-- **Electron Forge**: https://www.electronforge.io
-- **Electron Fiddle**: https://www.electronjs.org/zh/fiddle
-- **GitHub Repository**: https://github.com/electron/electron
+## Connecting
 
-## Keywords
+```bash
+# Connect to a specific port
+agent-browser connect 9222
 
-Electron, desktop app, main process, renderer process, preload, IPC, BrowserWindow, Menu, Tray, Dialog, packaging, electron-builder, electron-forge, electron-fiddle, cross-platform, 桌面应用, 主进程, 渲染进程, IPC 通信, 窗口, 菜单, 托盘, 打包
+# Or use --cdp on each command
+agent-browser --cdp 9222 snapshot -i
+
+# Auto-discover a running Chromium-based app
+agent-browser --auto-connect snapshot -i
+```
+
+After `connect`, all subsequent commands target the connected app without needing `--cdp`.
+
+## Tab Management
+
+Electron apps often have multiple windows or webviews. Use tab commands to list and switch between them:
+
+```bash
+# List all available targets (windows, webviews, etc.)
+agent-browser tab
+
+# Switch to a specific tab by index
+agent-browser tab 2
+
+# Switch by URL pattern
+agent-browser tab --url "*settings*"
+```
+
+## Webview Support
+
+Electron `<webview>` elements are automatically discovered and can be controlled like regular pages. Webviews appear as separate targets in the tab list with `type: "webview"`:
+
+```bash
+# Connect to running Electron app
+agent-browser connect 9222
+
+# List targets -- webviews appear alongside pages
+agent-browser tab
+# Example output:
+#   0: [page]    Slack - Main Window     https://app.slack.com/
+#   1: [webview] Embedded Content        https://example.com/widget
+
+# Switch to a webview
+agent-browser tab 1
+
+# Interact with the webview normally
+agent-browser snapshot -i
+agent-browser click @e3
+agent-browser screenshot webview.png
+```
+
+**Note:** Webview support works via raw CDP connection.
+
+## Common Patterns
+
+### Inspect and Navigate an App
+
+```bash
+open -a "Slack" --args --remote-debugging-port=9222
+sleep 3  # Wait for app to start
+agent-browser connect 9222
+agent-browser snapshot -i
+# Read the snapshot output to identify UI elements
+agent-browser click @e10  # Navigate to a section
+agent-browser snapshot -i  # Re-snapshot after navigation
+```
+
+### Take Screenshots of Desktop Apps
+
+```bash
+agent-browser connect 9222
+agent-browser screenshot app-state.png
+agent-browser screenshot --full full-app.png
+agent-browser screenshot --annotate annotated-app.png
+```
+
+### Extract Data from a Desktop App
+
+```bash
+agent-browser connect 9222
+agent-browser snapshot -i
+agent-browser get text @e5
+agent-browser snapshot --json > app-state.json
+```
+
+### Fill Forms in Desktop Apps
+
+```bash
+agent-browser connect 9222
+agent-browser snapshot -i
+agent-browser fill @e3 "search query"
+agent-browser press Enter
+agent-browser wait 1000
+agent-browser snapshot -i
+```
+
+### Run Multiple Apps Simultaneously
+
+Use named sessions to control multiple Electron apps at the same time:
+
+```bash
+# Connect to Slack
+agent-browser --session slack connect 9222
+
+# Connect to VS Code
+agent-browser --session vscode connect 9223
+
+# Interact with each independently
+agent-browser --session slack snapshot -i
+agent-browser --session vscode snapshot -i
+```
+
+## Color Scheme
+
+The default color scheme when connecting via CDP may be `light`. To preserve dark mode:
+
+```bash
+agent-browser connect 9222
+agent-browser --color-scheme dark snapshot -i
+```
+
+Or set it globally:
+
+```bash
+AGENT_BROWSER_COLOR_SCHEME=dark agent-browser connect 9222
+```
+
+## Troubleshooting
+
+### "Connection refused" or "Cannot connect"
+
+- Make sure the app was launched with `--remote-debugging-port=NNNN`
+- If the app was already running, quit and relaunch with the flag
+- Check that the port isn't in use by another process: `lsof -i :9222`
+
+### App launches but connect fails
+
+- Wait a few seconds after launch before connecting (`sleep 3`)
+- Some apps take time to initialize their webview
+
+### Elements not appearing in snapshot
+
+- The app may use multiple webviews. Use `agent-browser tab` to list targets and switch to the right one
+
+### Cannot type in input fields
+
+- Try `agent-browser keyboard type "text"` to type at the current focus without a selector
+- Some Electron apps use custom input components; use `agent-browser keyboard inserttext "text"` to bypass key events
+
+## Supported Apps
+
+Any app built on Electron works, including:
+
+- **Communication:** Slack, Discord, Microsoft Teams, Signal, Telegram Desktop
+- **Development:** VS Code, GitHub Desktop, Postman, Insomnia
+- **Design:** Figma, Notion, Obsidian
+- **Media:** Spotify, Tidal
+- **Productivity:** Todoist, Linear, 1Password
+
+If an app is built with Electron, it supports `--remote-debugging-port` and can be automated with agent-browser.

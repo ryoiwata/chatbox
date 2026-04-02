@@ -2,9 +2,9 @@
   "version": 1,
   "skills": {
     "electron": {
-      "source": "teachingai/full-stack-skills",
+      "source": "vercel-labs/agent-browser",
       "sourceType": "github",
-      "computedHash": "9d82126e6c46dd626fc6b1d2e259687d1b64ad61900166b8fc5a3b661c243cf4"
+      "computedHash": "9c6ee7f028f409be8ba695dd9a6493c7de9a3802ee538ee905baaceea419aba9"
     },
     "nodejs-backend-patterns": {
       "source": "wshobson/agents",
