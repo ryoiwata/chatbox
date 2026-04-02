@@ -20,6 +20,11 @@
       "source": "google-labs-code/stitch-skills",
       "sourceType": "github",
       "computedHash": "01a94f035a1c3a1a405f611c0df212433d8973f18bf16e94540875ec58ee7b9b"
+    },
+    "websocket-engineer": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "computedHash": "a498a3fb8345b1edff9634de603ccc33aa58f98374870d8504b672384a28513d"
     }
   }
 }
