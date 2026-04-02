@@ -5,6 +5,11 @@
       "source": "callstackincubator/agent-skills",
       "sourceType": "github",
       "computedHash": "6f5210e63faead5d3c0c8ff4f5ed5fda60ec7472ea2b212622c4e1ae6f12fefa"
+    },
+    "react:components": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "computedHash": "01a94f035a1c3a1a405f611c0df212433d8973f18bf16e94540875ec58ee7b9b"
     }
   }
 }
