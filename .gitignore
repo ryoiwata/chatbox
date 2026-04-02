@@ -188,3 +188,8 @@ storybook-static
 .gstack/
 .worktrees/
 .claude/worktrees/
+
+# Chatbridge
+.claude/tracking
+firebase-debug.log
+.mcp.json
