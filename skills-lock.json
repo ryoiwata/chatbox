@@ -26,6 +26,11 @@
       "sourceType": "github",
       "computedHash": "8022448de70ba9a485e3b5bce34c5bbc644f93eb39b68431c9f7dabcf03aeb09"
     },
+    "prisma-cli": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "computedHash": "b9d9314e3716af725997843c5026ba0e258fb2d27a986190bf2ad53be67b72b9"
+    },
     "prisma-driver-adapter-implementation": {
       "source": "prisma/skills",
       "sourceType": "github",
