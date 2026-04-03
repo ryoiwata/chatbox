@@ -7,6 +7,10 @@ import jwt from 'jsonwebtoken'
 import { prisma } from './lib/prisma'
 import { handleWebSocketConnection } from './ws/chatHandler'
 import appsRouter from './routes/apps'
+import authRouter from './routes/auth'
+import conversationsRouter from './routes/conversations'
+import { requireAuth } from './middleware/auth'
+import { authLimiter, apiLimiter } from './middleware/rateLimit'
 
 // Fail fast on missing required env vars
 const requiredEnvVars = ['DATABASE_URL', 'ANTHROPIC_API_KEY', 'JWT_SECRET'] as const
@@ -30,13 +34,23 @@ const app = express()
 
 app.use(express.json())
 
+// Rate limiters
+app.use('/api/auth', authLimiter)
+app.use('/api', apiLimiter)
+
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// App registry
+// Auth routes (public)
+app.use('/api/auth', authRouter)
+
+// App registry (public GET, auth required for POST/PATCH)
 app.use('/api/apps', appsRouter)
+
+// Conversations (all endpoints require auth)
+app.use('/api/conversations', requireAuth, conversationsRouter)
 
 // Static: chess built SPA (must come before the generic /apps catch-all)
 app.use('/apps/chess', express.static(path.join(__dirname, '../../apps/chess/dist')))
