@@ -1,5 +1,6 @@
 import type { PluginManifest } from '../../../shared/types/chatbridge'
 import { chatBridgeStore } from '../../stores/chatBridgeStore'
+import { API_BASE, useAuthStore } from '../../stores/authStore'
 import { ChatBridgeWsClient } from './ws-client'
 
 const HARDCODED_FALLBACK_APPS: PluginManifest[] = [
@@ -70,7 +71,14 @@ const HARDCODED_FALLBACK_APPS: PluginManifest[] = [
 export const chatBridgeController = {
   async loadRegistry(): Promise<void> {
     try {
-      const res = await fetch('/api/apps')
+      const token = useAuthStore.getState().token
+      const res = await fetch(`${API_BASE}/api/apps`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (res.status === 401) {
+        useAuthStore.getState().logout()
+        throw new Error('/api/apps returned 401')
+      }
       if (!res.ok) throw new Error(`/api/apps returned ${res.status}`)
       const data = (await res.json()) as unknown
       // Server returns { apps: [...] } or a raw array
@@ -92,10 +100,7 @@ export const chatBridgeController = {
 
     let wsClient = store.getWsClient()
     if (!wsClient) {
-      // M0-M4: token comes from VITE env var (set in .env.local) or localStorage dev override
-      const token =
-        (typeof import.meta !== 'undefined' && (import.meta.env as Record<string, string>).VITE_CHATBRIDGE_DEV_TOKEN) ||
-        (typeof localStorage !== 'undefined' ? (localStorage.getItem('chatbridge_dev_token') ?? '') : '')
+      const token = useAuthStore.getState().token ?? ''
 
       wsClient = new ChatBridgeWsClient(token)
       store.setWsClient(wsClient)
