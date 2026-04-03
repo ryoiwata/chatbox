@@ -1,0 +1,51 @@
+import 'dotenv/config'
+import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
+
+const prisma = new PrismaClient()
+
+async function main(): Promise<void> {
+  const email = 'demo@chatbridge.app'
+  const password = 'demo123'
+
+  const existingUser = await prisma.user.findUnique({ where: { email } })
+
+  let userId: string
+
+  if (existingUser) {
+    console.log(`Demo user already exists: ${email}`)
+    userId = existingUser.id
+  } else {
+    const passwordHash = await bcrypt.hash(password, 10)
+    const user = await prisma.user.create({
+      data: { email, passwordHash },
+    })
+    userId = user.id
+    console.log(`Created demo user: ${email} (id: ${userId})`)
+  }
+
+  const jwtSecret = process.env.JWT_SECRET
+  if (!jwtSecret) {
+    console.error('JWT_SECRET not set — cannot generate test token')
+    process.exit(1)
+  }
+
+  const token = jwt.sign({ userId }, jwtSecret, { expiresIn: '24h' })
+
+  console.log('\n--- TEST JWT (valid 24h) ---')
+  console.log(token)
+  console.log('\nTest with wscat:')
+  console.log(`  wscat -c 'ws://localhost:3000/ws?token=${token}'`)
+  console.log('\nThen send:')
+  console.log('  {"type":"user_message","conversationId":"test-123","content":"Hello, who are you?"}')
+}
+
+main()
+  .catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })
