@@ -39,6 +39,7 @@ import './setup/protect'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { initLastUsedModelStore } from './stores/lastUsedModelStore'
 import { initSettingsStore } from './stores/settingsStore'
+import { chatBridgeController } from './packages/chatbridge/controller'
 
 // 开发环境下引入错误测试工具
 // if (process.env.NODE_ENV === 'development') {
@@ -71,6 +72,11 @@ async function initializeApp() {
 
   // 启动mcp服务器
   import('./setup/mcp_bootstrap')
+
+  // Load ChatBridge app registry (non-blocking)
+  chatBridgeController.loadRegistry().catch((err) => {
+    console.warn('[ChatBridge] registry load failed', err)
+  })
 }
 
 // ==========渲染节点==============
