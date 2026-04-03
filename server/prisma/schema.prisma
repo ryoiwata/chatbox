@@ -16,6 +16,30 @@ model User {
   passwordHash  String         @map("password_hash")
   createdAt     DateTime       @default(now()) @map("created_at")
   conversations Conversation[]
+  oauthTokens   OAuthToken[]
+}
+
+model AppRegistration {
+  id          String   @id @default(uuid())
+  name        String
+  url         String
+  description String
+  toolSchemas Json     @map("tool_schemas")
+  status      String   @default("pending")
+  timeout     Int      @default(10000)
+  createdAt   DateTime @default(now()) @map("created_at")
+}
+
+model OAuthToken {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  provider     String
+  accessToken  String    @map("access_token")
+  refreshToken String?   @map("refresh_token")
+  expiresAt    DateTime? @map("expires_at")
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, provider])
 }
 
 model Conversation {
