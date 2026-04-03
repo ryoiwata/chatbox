@@ -204,12 +204,19 @@ export async function generate(
                   void modifyMessage(sessionId, targetMsg, false, true)
                 },
                 onToolCall: async ({ toolCallId, toolName, params }) => {
-                  console.warn('[ChatBridge] Tool call received but no iframe frame handler yet — M2 needed', {
-                    toolCallId,
-                    toolName,
-                    params,
-                  })
-                  wsClient.sendToolResult(toolCallId, { error: 'iframe not ready' })
+                  const invoker = chatBridgeStore.getState().getToolInvoker(sessionId)
+                  if (!invoker) {
+                    console.error('[ChatBridge] No tool invoker — iframe not ready', { toolCallId, toolName })
+                    wsClient.sendToolResult(toolCallId, { error: 'App not ready' })
+                    return
+                  }
+                  try {
+                    const result = await invoker(toolCallId, toolName, params)
+                    wsClient.sendToolResult(toolCallId, result)
+                  } catch (err) {
+                    console.error('[ChatBridge] Tool invocation failed:', err)
+                    wsClient.sendToolResult(toolCallId, { error: err instanceof Error ? err.message : 'Tool invocation failed' })
+                  }
                 },
                 onDone: () => {
                   targetMsg = { ...targetMsg, generating: false, cancel: undefined, status: [] }
