@@ -9,6 +9,7 @@ import { handleWebSocketConnection } from './ws/chatHandler'
 import appsRouter from './routes/apps'
 import authRouter from './routes/auth'
 import conversationsRouter from './routes/conversations'
+import internalRouter from './routes/internal'
 import { requireAuth } from './middleware/auth'
 import { authLimiter, apiLimiter } from './middleware/rateLimit'
 
@@ -52,7 +53,11 @@ app.use('/api/apps', appsRouter)
 // Conversations (all endpoints require auth)
 app.use('/api/conversations', requireAuth, conversationsRouter)
 
+// Internal API proxy (no auth — server-side key protection)
+app.use('/api/internal', internalRouter)
+
 // Static: chess built SPA (must come before the generic /apps catch-all)
+app.use('/apps/weather', express.static(path.join(__dirname, '../../apps/weather/dist')))
 app.use('/apps/chess', express.static(path.join(__dirname, '../../apps/chess/dist')))
 // Static: demo apps and built frontend (populated in later milestones)
 app.use('/apps', express.static(path.join(__dirname, '../../apps')))

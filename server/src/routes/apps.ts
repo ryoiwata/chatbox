@@ -88,6 +88,39 @@ router.get('/', (_req, res) => {
       ],
       status: 'approved',
     },
+    {
+      id: 'weather',
+      name: 'Weather',
+      url: '/apps/weather',
+      description:
+        'Weather dashboard. Ask about current conditions or forecasts for any city. Weather data is fetched server-side — no API key exposed to the browser.',
+      tools: [
+        {
+          name: 'get_current_weather',
+          description: 'Get the current weather conditions for a location',
+          parameters: {
+            type: 'object',
+            properties: {
+              location: { type: 'string', description: 'City name, e.g. "Tokyo"' },
+            },
+            required: ['location'],
+          },
+        },
+        {
+          name: 'get_forecast',
+          description: 'Get a multi-day weather forecast for a location',
+          parameters: {
+            type: 'object',
+            properties: {
+              location: { type: 'string', description: 'City name' },
+              days: { type: 'number', description: 'Number of forecast days (default 4)' },
+            },
+            required: ['location'],
+          },
+        },
+      ],
+      status: 'approved',
+    },
   ])
 })
 
