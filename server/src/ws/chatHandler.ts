@@ -186,6 +186,35 @@ function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | undefined 
         },
       },
     ],
+    Weather: [
+      {
+        name: 'get_current_weather',
+        description:
+          'Get the current weather conditions for a location. Returns temperature, humidity, wind speed, and description.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            location: {
+              type: 'string',
+              description: 'City name, e.g. "Tokyo", "New York", "London"',
+            },
+          },
+          required: ['location'],
+        },
+      },
+      {
+        name: 'get_forecast',
+        description: 'Get a multi-day weather forecast for a location.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            location: { type: 'string', description: 'City name' },
+            days: { type: 'number', description: 'Number of forecast days (default 4)' },
+          },
+          required: ['location'],
+        },
+      },
+    ],
   }
 
   const tools = activeApps.flatMap((app) => allTools[app] ?? [])
