@@ -40,6 +40,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { initLastUsedModelStore } from './stores/lastUsedModelStore'
 import { initSettingsStore } from './stores/settingsStore'
 import { chatBridgeController } from './packages/chatbridge/controller'
+import { useAuthStore } from './stores/authStore'
 
 // 开发环境下引入错误测试工具
 // if (process.env.NODE_ENV === 'development') {
@@ -57,6 +58,9 @@ if (CHATBOX_BUILD_TARGET === 'mobile_app' && CHATBOX_BUILD_PLATFORM === 'ios') {
 // ==========执行初始化==============
 async function initializeApp() {
   log.info('initializeApp')
+
+  // Validate stored JWT and populate authStore before rendering
+  await useAuthStore.getState().initialize()
 
   try {
     // 数据迁移

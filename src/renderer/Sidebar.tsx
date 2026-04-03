@@ -6,6 +6,7 @@ import {
   IconHelpCircle,
   IconInfoCircle,
   IconLayoutSidebarLeftCollapse,
+  IconLogout,
   IconMessageChatbot,
   IconPhotoPlus,
   IconSettingsFilled,
@@ -30,6 +31,7 @@ import { featureFlags } from './utils/feature-flags'
 import icon from './static/icon.png'
 import { settingsStore, useLanguage } from './stores/settingsStore'
 import { taskSessionStore } from './stores/taskSessionStore'
+import { useAuthStore } from './stores/authStore'
 import { useUIStore } from './stores/uiStore'
 import { CHATBOX_BUILD_PLATFORM } from './variables'
 
@@ -362,6 +364,15 @@ export default function Sidebar() {
                 }
                 leftSection={<ScalableIcon icon={IconInfoCircle} size={20} />}
                 onClick={() => navigate({ to: '/about' })}
+                variant="light"
+                p="xs"
+              />
+              <NavLink
+                c="chatbox-secondary"
+                className="rounded"
+                label="Sign Out"
+                leftSection={<ScalableIcon icon={IconLogout} size={20} />}
+                onClick={() => useAuthStore.getState().logout()}
                 variant="light"
                 p="xs"
               />
