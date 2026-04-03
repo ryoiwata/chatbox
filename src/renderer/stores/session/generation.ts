@@ -171,57 +171,64 @@ export async function generate(
   try {
     // === CHATBRIDGE INTERCEPTION ===
     if (chatBridgeStore.getState().isActive(sessionId)) {
-      const wsClient = chatBridgeStore.getState().getWsClient()
-      const appContext = chatBridgeStore.getState().getAppContext(sessionId)
+      const lastUserMsg = messages.slice(0, targetMsgIx).findLast((m) => m.role === 'user')
+      const content = lastUserMsg?.contentParts.find((p) => p.type === 'text')?.text ?? ''
 
-      if (!wsClient) {
-        throw new Error('[ChatBridge] WebSocket client not initialized. Activate an app first.')
+      if (!content) {
+        console.warn('[ChatBridge] No user message content found — falling through to normal pipeline')
+      } else {
+        const wsClient = chatBridgeStore.getState().getWsClient()
+        const appContext = chatBridgeStore.getState().getAppContext(sessionId)
+
+        if (!wsClient) {
+          throw new Error('[ChatBridge] WebSocket client not initialized. Activate an app first.')
+        }
+
+        let streamedText = ''
+
+        await new Promise<void>((outerResolve, outerReject) => {
+          void wsClient
+            .sendUserMessage(
+              {
+                conversationId: sessionId,
+                content,
+                appContext: appContext as Record<string, unknown>,
+              },
+              {
+                onToken: (token) => {
+                  streamedText += token
+                  targetMsg = {
+                    ...targetMsg,
+                    contentParts: [{ type: 'text' as const, text: streamedText }],
+                  }
+                  void modifyMessage(sessionId, targetMsg, false, true)
+                },
+                onToolCall: async ({ toolCallId, toolName, params }) => {
+                  console.warn('[ChatBridge] Tool call received but no iframe frame handler yet — M2 needed', {
+                    toolCallId,
+                    toolName,
+                    params,
+                  })
+                  wsClient.sendToolResult(toolCallId, { error: 'iframe not ready' })
+                },
+                onDone: () => {
+                  targetMsg = { ...targetMsg, generating: false, cancel: undefined, status: [] }
+                  void modifyMessage(sessionId, targetMsg, true)
+                  outerResolve()
+                },
+                onError: (msg) => {
+                  targetMsg = { ...targetMsg, generating: false, cancel: undefined, status: [], error: msg }
+                  void modifyMessage(sessionId, targetMsg, true)
+                  outerReject(new Error(msg))
+                },
+              }
+            )
+            .catch(outerReject)
+        })
+
+        appleAppStore.tickAfterMessageGenerated()
+        return
       }
-
-      let streamedText = ''
-
-      await new Promise<void>((outerResolve, outerReject) => {
-        void wsClient
-          .sendUserMessage(
-            {
-              conversationId: sessionId,
-              content: targetMsg.contentParts.find((p) => p.type === 'text')?.text ?? '',
-              appContext: appContext as Record<string, unknown>,
-            },
-            {
-              onToken: (token) => {
-                streamedText += token
-                targetMsg = {
-                  ...targetMsg,
-                  contentParts: [{ type: 'text' as const, text: streamedText }],
-                }
-                void modifyMessage(sessionId, targetMsg, false, true)
-              },
-              onToolCall: async ({ toolCallId, toolName, params }) => {
-                console.warn('[ChatBridge] Tool call received but no iframe frame handler yet — M2 needed', {
-                  toolCallId,
-                  toolName,
-                  params,
-                })
-                wsClient.sendToolResult(toolCallId, { error: 'iframe not ready' })
-              },
-              onDone: () => {
-                targetMsg = { ...targetMsg, generating: false, cancel: undefined, status: [] }
-                void modifyMessage(sessionId, targetMsg, true)
-                outerResolve()
-              },
-              onError: (msg) => {
-                targetMsg = { ...targetMsg, generating: false, cancel: undefined, status: [], error: msg }
-                void modifyMessage(sessionId, targetMsg, true)
-                outerReject(new Error(msg))
-              },
-            }
-          )
-          .catch(outerReject)
-      })
-
-      appleAppStore.tickAfterMessageGenerated()
-      return
     }
     // === END CHATBRIDGE INTERCEPTION ===
 
