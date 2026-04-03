@@ -6,6 +6,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import jwt from 'jsonwebtoken'
 import { prisma } from './lib/prisma'
 import { handleWebSocketConnection } from './ws/chatHandler'
+import appsRouter from './routes/apps'
 
 // Fail fast on missing required env vars
 const requiredEnvVars = ['DATABASE_URL', 'ANTHROPIC_API_KEY', 'JWT_SECRET'] as const
@@ -33,6 +34,9 @@ app.use(express.json())
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
+
+// App registry
+app.use('/api/apps', appsRouter)
 
 // Static: demo apps and built frontend (populated in later milestones)
 app.use('/apps', express.static(path.join(__dirname, '../../apps')))

@@ -2,7 +2,8 @@ import { getModel } from '@shared/models'
 import { ChatboxAIAPIError, OCRError } from '@shared/models/errors'
 import { sequenceMessages } from '@shared/utils/message'
 import { getModelSettings } from '@shared/utils/model_settings'
-import type { ModelMessage, ToolSet } from 'ai'
+import { tool, type ModelMessage, type ToolSet } from 'ai'
+import { z } from 'zod'
 import { t } from 'i18next'
 import { uniqueId } from 'lodash'
 import { createModelDependencies } from '@/adapters'
@@ -36,6 +37,8 @@ import {
 import fileToolSet from './toolsets/file'
 import { getToolSet } from './toolsets/knowledge-base'
 import websearchToolSet, { parseLinkTool, webSearchTool } from './toolsets/web-search'
+import { chatBridgeController } from '../chatbridge/controller'
+import { chatBridgeStore } from '@/stores/chatBridgeStore'
 
 /**
  * 处理搜索结果并返回模型响应的通用函数
@@ -314,6 +317,36 @@ export async function streamText(
         ...tools,
         ...fileToolSet.tools,
       }
+    }
+
+    // ChatBridge: inject activate_app meta-tool
+    const chatBridgeRegistry = chatBridgeStore.getState().registry
+    if (chatBridgeRegistry.length > 0) {
+      const appListSummary = chatBridgeRegistry.map((a) => `${a.name} (${a.description})`).join(', ')
+      tools.activate_app = tool({
+        description: `Activate a third-party application. Available apps: ${appListSummary}. Call this when the user wants to use one of these apps.`,
+        inputSchema: z.object({
+          appName: z.string().describe('Name of the app to activate'),
+        }),
+        execute: async ({ appName }) => {
+          const app = chatBridgeRegistry.find((a) => a.name.toLowerCase() === appName.toLowerCase())
+          if (!app) {
+            return {
+              error: `App "${appName}" not found. Available: ${chatBridgeRegistry.map((a) => a.name).join(', ')}`,
+            }
+          }
+          if (!sessionId) {
+            return { error: 'Session ID not available' }
+          }
+          await chatBridgeController.activate(sessionId, app)
+          return {
+            status: 'activated',
+            app: app.name,
+            tools: app.tools.map((t) => t.name),
+            description: app.description,
+          }
+        },
+      })
     }
 
     console.debug('tools', tools)
