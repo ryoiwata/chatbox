@@ -23,6 +23,48 @@ const HARDCODED_FALLBACK_APPS: PluginManifest[] = [
     status: 'approved',
     authRequired: false,
   },
+  {
+    id: 'chess',
+    name: 'Chess',
+    url: '/apps/chess',
+    description:
+      'Interactive chess game with AI analysis. Play chess against yourself or get move suggestions from Claude.',
+    tools: [
+      {
+        name: 'start_game',
+        description: 'Start a new chess game',
+        parameters: {
+          type: 'object',
+          properties: {
+            color: { type: 'string', enum: ['white', 'black'] },
+          },
+        },
+      },
+      {
+        name: 'make_move',
+        description: 'Make a chess move',
+        parameters: {
+          type: 'object',
+          properties: {
+            from: { type: 'string' },
+            to: { type: 'string' },
+            promotion: { type: 'string', enum: ['q', 'r', 'b', 'n'] },
+          },
+          required: ['from', 'to'],
+        },
+      },
+      {
+        name: 'get_board_state',
+        description: 'Get the current board position and game status',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+    ],
+    status: 'approved',
+    authRequired: false,
+  },
 ]
 
 export const chatBridgeController = {
