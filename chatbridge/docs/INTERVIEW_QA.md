@@ -21,7 +21,7 @@ Once that pipe works, the vertical slice is: user says "let's play chess" → LL
 
 The reason I don't go pure frontend-first with mocks is that the WebSocket-to-postMessage handoff is the riskiest integration point — mocking it would just delay discovering the real problems. And I don't go full backend-first because I'd spend two days building CRUD endpoints before touching the plugin system, which is what I'm actually graded on.
 
-**Decision:** Thin backend scaffold (day 1) → vertical slice end-to-end → expand outward.
+**Decision:** Thin backend scaffold (day 1, using Anthropic Claude SDK) → vertical slice end-to-end → expand outward.
 
 ---
 
@@ -40,7 +40,7 @@ This matches how OpenAI's function calling actually works — it's multi-turn, n
 
 Holding the OpenAI connection open (option 1) doesn't really work because the streaming API completes when tool_calls are emitted — there's nothing to "hold open." You'd have to fight the SDK to do it that way.
 
-**Decision:** Client drives continuation. Multi-turn protocol: server sends complete turn → client does iframe round-trip → client sends tool_result back → server makes next OpenAI call.
+**Decision:** Client drives continuation. Multi-turn protocol: server sends complete turn → client does iframe round-trip → client sends tool_result back → server makes next Anthropic Claude API call.
 
 ---
 
@@ -393,7 +393,7 @@ This is simpler than option 2 because the backend is stateless between requests 
 
 If no app is active, `appContext` is omitted or empty, and the backend constructs a system prompt with no app context — which is the normal chat case.
 
-**Decision:** Client piggybacks `appContext` (with current state snapshots) on every `user_message` WS payload. Backend is stateless between requests. No server-side state tracking, no race conditions. Backend formats `appContext` into system prompt for each OpenAI call.
+**Decision:** Client piggybacks `appContext` (with current state snapshots) on every `user_message` WS payload. Backend is stateless between requests. No server-side state tracking, no race conditions. Backend formats `appContext` into the Anthropic `system` parameter for each Claude API call.
 
 ---
 
@@ -446,7 +446,7 @@ For the sprint, I implement the message persistence (required, graded) and the r
 | Topic | Decision | Rationale |
 |---|---|---|
 | Build sequence | Thin backend scaffold → vertical slice (test-app) → chess → auth UI → weather → Spotify | WebSocket↔postMessage handoff is the riskiest integration — prove it first |
-| WebSocket↔postMessage handoff | Client drives continuation (multi-turn) | Matches how OpenAI function calling actually works; server stream completes when tool_calls are emitted |
+| WebSocket↔postMessage handoff | Client drives continuation (multi-turn) | Matches how Anthropic tool use actually works; stream completes when `stop_reason: "tool_use"` is emitted |
 | Multi-tool synchronization | Collect all tool results, send as batch | Simpler server-side; avoids partial continuation |
 | iframe placement | Side panel (right of chat), reusing Artifact.tsx layout | Chatbox already has the layout infrastructure; user sees chat + board simultaneously |
 | LLM pipeline split | Parallel — Chatbox pipeline untouched; backend WS only for ChatBridge sessions | Reimplementing Chatbox's full pipeline would be days of work for zero benefit |

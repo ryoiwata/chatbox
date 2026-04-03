@@ -10,7 +10,7 @@ Built for the TutorMeAI case study — a K-12 education platform where 200,000+ 
 
 ## Features
 
-- **AI Chat** — Real-time streaming chat powered by OpenAI GPT-4o-mini / GPT-4o with persistent conversation history
+- **AI Chat** — Real-time streaming chat powered by Anthropic Claude Sonnet 4.6 with persistent conversation history
 - **Plugin System** — Third-party apps register tools via REST API or postMessage, render UI in sandboxed iframes, and communicate with the LLM through a typed message protocol
 - **Three Demo Apps** — Chess (stateful game with AI analysis), Weather Dashboard (external API, no auth), Spotify Playlist Creator (full OAuth2 flow)
 - **User Authentication** — JWT-based platform auth with bcrypt password hashing
@@ -48,7 +48,7 @@ Two separate communication channels: **WebSocket** for client ↔ server (chat, 
 - Node.js 20+
 - pnpm 9+
 - PostgreSQL (or Railway Postgres addon)
-- OpenAI API key
+- Anthropic API key
 
 ### Setup
 
@@ -64,7 +64,7 @@ pnpm install
 cd server
 npm install
 cp .env.example .env
-# Edit .env with your database URL, OpenAI key, and JWT secret
+# Edit .env with your database URL, Anthropic API key, and JWT secret
 
 # Run database migrations
 npx prisma migrate dev
@@ -79,7 +79,7 @@ Create `server/.env`:
 
 ```env
 DATABASE_URL=postgresql://user:pass@localhost:5432/chatbridge
-OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 JWT_SECRET=your-random-secret-here
 SPOTIFY_CLIENT_ID=...          # Optional, for Spotify app
 SPOTIFY_CLIENT_SECRET=...      # Optional, for Spotify app

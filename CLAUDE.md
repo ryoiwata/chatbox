@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ChatBridge is a plugin system built on a fork of [Chatbox](https://github.com/Bin-Huang/chatbox) that enables third-party apps to register tools, render custom UI inside the chat via sandboxed iframes, and communicate bidirectionally with the LLM through a typed postMessage protocol. Targets K-12 education (TutorMeAI case study).
 
-**Stack:** React 18 · Zustand · TanStack Router/Query · Vite · Node.js/Express · WebSocket (`ws`) · PostgreSQL (Prisma) · OpenAI GPT-4o-mini/4o · iframe + postMessage
+**Stack:** React 18 · Zustand · TanStack Router/Query · Vite · Node.js/Express · WebSocket (`ws`) · PostgreSQL (Prisma) · Anthropic Claude Sonnet 4.6 · iframe + postMessage
 
 **Do not suggest switching frameworks or languages.** The Chatbox fork and Express backend are intentional choices documented in the pre-search.
 
@@ -63,7 +63,7 @@ cd server && npm run lint             # ESLint (backend)
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `OPENAI_API_KEY` | Yes | — | OpenAI API key for LLM calls |
+| `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key for LLM calls |
 | `JWT_SECRET` | Yes | — | Secret for signing JWTs |
 | `PORT` | No | `3000` | Express server port |
 | `CLIENT_URL` | No | `http://localhost:5173` | Frontend URL (CORS) |
@@ -132,7 +132,7 @@ chatbox/
 - **Express backend added to a client-side app** — Chatbox is pure-client (IndexedDB, no server). We add a backend for user auth, persistent history, and OAuth token storage. LLM calls move server-side to protect API keys.
 - **iframe + postMessage for sandboxing** — Extends the existing `Artifact.tsx` pattern. Browser-enforced security boundary. Origin validated on every message.
 - **Custom JWT auth over managed service** — Avoids vendor dependency during a one-week sprint. Half-day implementation cost is acceptable.
-- **GPT-4o-mini default, GPT-4o for complex reasoning** — Keeps average tool invocation under $0.03. Chess analysis uses GPT-4o; routing uses mini.
+- **Claude Sonnet 4.6 as the single model** — One model for all calls (chat, tool routing, chess analysis). Eliminates model-switching logic. ~$3/M input, ~$15/M output tokens.
 - **Prisma over raw SQL** — Typed queries match TypeScript-everywhere approach. Auto-generated migrations for a shifting schema.
 
 ## Git Workflow
@@ -170,7 +170,7 @@ After every meaningful change, commit with a conventional commit message. Run ty
 - All new types use Zod schemas with `z.infer<>` for TypeScript types — match Chatbox's existing pattern in `src/shared/types/`
 - Validate postMessage origin on every received message — never trust `event.data` without checking `event.origin` or `event.source`
 - Never send conversation history to third-party apps — only send the tool's declared parameters
-- Never expose `OPENAI_API_KEY` or `JWT_SECRET` to the client — these stay server-side only
+- Never expose `ANTHROPIC_API_KEY` or `JWT_SECRET` to the client — these stay server-side only
 - iframe sandbox: `allow-scripts` by default. Add `allow-same-origin` only for trusted self-hosted demo apps.
 - Tool invocation timeout: 10 seconds default, configurable per app at registration
 - Error results are injected as normal tool results — the LLM handles them conversationally

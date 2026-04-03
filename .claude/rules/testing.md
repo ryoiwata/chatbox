@@ -6,7 +6,7 @@ Test what matters for a one-week sprint graded on plugin integration quality and
 
 **Test rigorously:** postMessage protocol handling, tool schema injection, tool invocation lifecycle, auth endpoints, app registration validation, WebSocket message handling, error/timeout behavior.
 **Test lightly:** Express route wiring, Prisma query correctness (trust Prisma), React component rendering.
-**Don't test:** Chatbox's existing code (MCP, providers, TanStack Router), OpenAI API behavior (mock it), chess.js move validation (trust the library).
+**Don't test:** Chatbox's existing code (MCP, providers, TanStack Router), Anthropic Claude API behavior (mock it), chess.js move validation (trust the library).
 
 ## Framework & Tools
 
@@ -203,7 +203,7 @@ describe('WebSocket', () => {
 ```
 
 #### 16. Message Handling
-- Receives `user_message` → stores in DB → calls OpenAI → streams `token` events back.
+- Receives `user_message` → stores in DB → calls Anthropic Claude → streams `token` events back.
 - Handles `tool_call` in LLM response → forwards to client.
 - Handles connection drop mid-stream gracefully.
 
@@ -243,32 +243,38 @@ These are manual-first for the sprint, automated if time allows.
 
 ## Mocking Strategy
 
-### OpenAI API Mock
+### Anthropic Claude API Mock
 ```typescript
-// Mock the OpenAI client for unit tests
-const mockOpenAI = {
-  chat: {
-    completions: {
-      create: vi.fn().mockResolvedValue({
-        choices: [{ message: { role: 'assistant', content: 'Hello!' } }]
+// Mock the Anthropic client for unit tests
+const mockAnthropic = {
+  messages: {
+    stream: vi.fn().mockReturnValue({
+      on: vi.fn().mockReturnThis(),
+      finalMessage: vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }],
+        stop_reason: 'end_turn'
       })
-    }
+    }),
+    create: vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'Hello!' }],
+      stop_reason: 'end_turn'
+    })
   }
 }
 ```
 
-For tool call responses, mock returns a `tool_calls` array:
+For tool use responses, mock returns `tool_use` content blocks and `stop_reason: 'tool_use'`:
 ```typescript
-mockCreate.mockResolvedValueOnce({
-  choices: [{
-    message: {
-      role: 'assistant',
-      tool_calls: [{
-        id: 'call_123',
-        function: { name: 'start_game', arguments: '{"color":"white"}' }
-      }]
+mockStream.finalMessage.mockResolvedValueOnce({
+  content: [
+    {
+      type: 'tool_use',
+      id: 'toolu_123',
+      name: 'start_game',
+      input: { color: 'white' }
     }
-  }]
+  ],
+  stop_reason: 'tool_use'
 })
 ```
 
@@ -288,7 +294,7 @@ Or use `vitest-mock-extended` to mock the Prisma client entirely for unit tests 
 
 - Don't test Chatbox's existing MCP integration, provider system, or TanStack Router — they work.
 - Don't test `chess.js` move validation — trust the library.
-- Don't test OpenAI's function calling behavior — mock it.
+- Don't test Anthropic's tool use behavior — mock it.
 - Don't test Prisma's query correctness — trust the ORM.
 - Don't test `bcrypt` hashing — trust the library.
 - Don't test WebSocket protocol compliance — trust `ws`.

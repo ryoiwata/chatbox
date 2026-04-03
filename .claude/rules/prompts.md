@@ -6,7 +6,7 @@
 - All request/response bodies are JSON. All timestamps are ISO 8601 format.
 - Authentication via JWT in `Authorization: Bearer <token>` header or httpOnly cookie.
 - Database access exclusively through Prisma — all types are derived from the Prisma schema.
-- OpenAI API calls happen server-side only. The client never sees the API key.
+- Anthropic API calls happen server-side only. The client never sees the API key.
 
 ## Database Schema (Prisma)
 
@@ -405,73 +405,108 @@ Connect: `ws://host:port/ws?token=JWT_TOKEN`
 }
 ```
 
-## OpenAI API Integration
+## Anthropic Claude API Integration
+
+**SDK:** `@anthropic-ai/sdk`. **Model:** `claude-sonnet-4-6`. **Env var:** `ANTHROPIC_API_KEY`.
+
+Key differences from OpenAI API that affect all backend code:
+- System prompt is a **separate `system` parameter**, not a message in the array
+- Tool schemas use `input_schema` (not `parameters`) in the Anthropic API call
+- Tool calls in responses are `content[]` blocks with `type: "tool_use"` (not `message.tool_calls`)
+- Tool results are `{ type: "tool_result", tool_use_id, content }` inside a **user** role message
+- Stop reason for tool use is `stop_reason: "tool_use"` (not `finish_reason: "tool_calls"`)
+- `max_tokens` is **required** (e.g. `4096`) — no default
+- Internal tool schemas (stored in DB, used in code) keep `parameters` field name; only convert to `input_schema` when calling the Anthropic API
 
 ### Chat Completion with Tools
 
 ```typescript
-const response = await openai.chat.completions.create({
-  model: 'gpt-4o-mini',  // or 'gpt-4o' for complex reasoning
-  messages: [
-    {
-      role: 'system',
-      content: `You are a helpful AI assistant on an educational platform.
+import { anthropic } from '../lib/anthropic'
+
+const stream = anthropic.messages.stream({
+  model: 'claude-sonnet-4-6',
+  max_tokens: 4096,
+  system: `You are a helpful AI assistant on an educational platform.
 Active apps: Chess (game in progress, FEN: ${currentFen}, ${moveCount} moves played, user playing white).
-Available tools allow you to interact with these apps.`
-    },
+Available tools allow you to interact with these apps.`,
+  messages: [
     ...conversationHistory,
     { role: 'user', content: userMessage }
   ],
   tools: [
     {
-      type: 'function',
-      function: {
-        name: 'start_game',
-        description: 'Start a new chess game',
-        parameters: {
-          type: 'object',
-          properties: {
-            color: { type: 'string', enum: ['white', 'black'] }
-          }
+      name: 'start_game',
+      description: 'Start a new chess game',
+      input_schema: {         // NOTE: input_schema (not parameters) for Anthropic API
+        type: 'object',
+        properties: {
+          color: { type: 'string', enum: ['white', 'black'] }
         }
       }
     },
     // ... more tools from active apps
   ],
-  stream: true
 })
 ```
 
 ### Streaming Response Handling
 
 ```typescript
-for await (const chunk of response) {
-  const delta = chunk.choices[0]?.delta
+let toolUseBlocks: Array<{ id: string; name: string; input: unknown }> = []
 
-  if (delta?.content) {
-    // Stream text token to client via WebSocket
-    ws.send(JSON.stringify({ type: 'token', data: delta.content }))
-  }
+stream.on('text', (text) => {
+  // Stream text token to client via WebSocket
+  ws.send(JSON.stringify({ type: 'token', data: text }))
+})
 
-  if (delta?.tool_calls) {
-    // LLM wants to call a tool — forward to client
-    for (const toolCall of delta.tool_calls) {
-      ws.send(JSON.stringify({
-        type: 'tool_call',
-        toolCallId: toolCall.id,
-        toolName: toolCall.function.name,
-        params: JSON.parse(toolCall.function.arguments)
-      }))
-    }
+stream.on('contentBlock', (block) => {
+  if (block.type === 'tool_use') {
+    toolUseBlocks.push({ id: block.id, name: block.name, input: block.input })
   }
+})
+
+const finalMessage = await stream.finalMessage()
+
+if (finalMessage.stop_reason === 'tool_use' && toolUseBlocks.length > 0) {
+  // Send tool calls to client, wait for results (see chatHandler.ts)
+  for (const tc of toolUseBlocks) {
+    ws.send(JSON.stringify({
+      type: 'tool_call',
+      toolCallId: tc.id,
+      toolName: tc.name,
+      params: tc.input
+    }))
+  }
+  // ... collect results, build continuation (see IMPLEMENTATION_PLAN.md M3)
 }
 
 ws.send(JSON.stringify({ type: 'done' }))
 ```
 
+### Tool Result Format (Anthropic-specific)
+
+Tool results must be sent as `tool_result` content blocks inside a **user** role message, not as a separate `tool` role:
+
+```typescript
+// Continuation call after tool results are collected:
+const continuationMessages = [
+  ...previousHistory,
+  { role: 'user' as const, content: userMessage },
+  { role: 'assistant' as const, content: finalMessage.content },  // includes tool_use blocks
+  {
+    role: 'user' as const,
+    content: toolUseBlocks.map((tc, i) => ({
+      type: 'tool_result' as const,
+      tool_use_id: tc.id,                    // NOTE: tool_use_id (not tool_call_id)
+      content: JSON.stringify(toolResults[i])
+    }))
+  }
+]
+```
+
 ## Tool Schema Format
 
-Tool schemas follow JSON Schema draft-07, matching OpenAI's function calling format:
+Tool schemas follow JSON Schema draft-07. Our internal format (DB storage, Zod types, postMessage protocol) uses `parameters`. When calling the Anthropic API, convert to `input_schema`:
 
 ```json
 {

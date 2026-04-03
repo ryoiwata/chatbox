@@ -2,12 +2,12 @@
 
 ## Secrets Management
 
-- **Never hardcode API keys or secrets.** `OPENAI_API_KEY`, `JWT_SECRET`, OAuth client secrets come from environment variables only.
+- **Never hardcode API keys or secrets.** `ANTHROPIC_API_KEY`, `JWT_SECRET`, OAuth client secrets come from environment variables only.
 - Load secrets via `.env` file locally (gitignored). On Railway, set via dashboard or CLI.
-- Required env vars: `DATABASE_URL`, `OPENAI_API_KEY`, `JWT_SECRET`.
+- Required env vars: `DATABASE_URL`, `ANTHROPIC_API_KEY`, `JWT_SECRET`.
 - Never log secret values. Log only that the variable "is set" or "is missing".
 - Fail fast on startup if required env vars are missing — don't let the user discover this mid-session.
-- Never expose `OPENAI_API_KEY` to the browser. All LLM calls happen server-side.
+- Never expose `ANTHROPIC_API_KEY` to the browser. All LLM calls happen server-side.
 
 ## .gitignore
 
@@ -95,7 +95,7 @@ window.addEventListener('message', (event) => {
 Set on the Express backend for all responses:
 
 ```
-Content-Security-Policy: default-src 'self'; frame-src https://*.railway.app https://localhost:*; script-src 'self'; connect-src 'self' https://api.openai.com wss://*
+Content-Security-Policy: default-src 'self'; frame-src https://*.railway.app https://localhost:*; script-src 'self'; connect-src 'self' https://api.anthropic.com wss://*
 X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
 Referrer-Policy: no-referrer
@@ -175,7 +175,7 @@ approved → rejected → (removed from users)
 
 ## What Not to Log
 
-- **Never log:** `OPENAI_API_KEY`, `JWT_SECRET`, OAuth tokens, user passwords, full LLM request/response bodies.
+- **Never log:** `ANTHROPIC_API_KEY`, `JWT_SECRET`, OAuth tokens, user passwords, full LLM request/response bodies.
 - **Safe to log:** User IDs (not emails in production), conversation IDs, tool names, invocation durations, token counts, error types.
 - When logging LLM interactions: log model name, message count, token usage, latency. Not the content.
 
@@ -183,7 +183,7 @@ approved → rejected → (removed from users)
 
 - Pin dependencies via `package-lock.json` and `pnpm-lock.yaml` (committed to git).
 - Before adding a new dependency, check if existing tools cover the need.
-- Key backend dependencies: `express`, `ws`, `bcrypt`, `jsonwebtoken`, `@prisma/client`, `openai`, `simple-oauth2`, `express-rate-limit`.
+- Key backend dependencies: `express`, `ws`, `bcrypt`, `jsonwebtoken`, `@prisma/client`, `@anthropic-ai/sdk`, `simple-oauth2`, `express-rate-limit`.
 - Key frontend: the existing Chatbox dependencies (React, Zustand, Jotai, TanStack, ai SDK).
 - Run `npm audit` periodically. Fix critical vulnerabilities.
 

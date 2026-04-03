@@ -57,7 +57,7 @@ The platform targets K-12 education. Safety, data privacy, and cost control are 
 | Database | PostgreSQL on Railway via Prisma |
 | Auth (platform) | Custom JWT (bcrypt + jsonwebtoken) |
 | Auth (third-party) | OAuth2 via `simple-oauth2`, popup window flow |
-| LLM | OpenAI GPT-4o-mini (default) + GPT-4o (complex reasoning) |
+| LLM | Anthropic Claude Sonnet 4.6 (`claude-sonnet-4-6`) via `@anthropic-ai/sdk` |
 | Sandboxing | iframe + postMessage with origin validation |
 | Deployment | Railway (backend + Postgres + static frontend) |
 
@@ -192,7 +192,7 @@ App state context is injected into the system prompt via `injectModelSystemPromp
 ### CSP Headers (Platform)
 
 ```
-Content-Security-Policy: default-src 'self'; frame-src https://*.railway.app; script-src 'self'; connect-src 'self' https://api.openai.com
+Content-Security-Policy: default-src 'self'; frame-src https://*.railway.app; script-src 'self'; connect-src 'self' https://api.anthropic.com
 X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
 ```
@@ -280,10 +280,12 @@ Three apps demonstrating different integration patterns:
 
 | Scale | Estimated Monthly LLM Cost | Assumptions |
 |---|---|---|
-| 100 users | ~$50 | 5 sessions/user/month, 10 tool invocations/session, GPT-4o-mini default |
-| 1,000 users | ~$450 | Same pattern, ~10% use GPT-4o for complex queries |
-| 10,000 users | ~$4,000 | Schema pruning reduces per-call token count by ~30% |
-| 100,000 users | ~$35,000 | Caching common responses, aggressive summarization |
+| 100 users | ~$75 | 5 sessions/user/month, 10 tool invocations/session, ~2K input + 500 output tokens per call |
+| 1,000 users | ~$650 | Same pattern, prompt caching reduces input cost ~20% on cache hits |
+| 10,000 users | ~$5,500 | Aggressive context summarization saves ~30% |
+| 100,000 users | ~$45,000 | Prompt caching + tool result caching |
+
+Pricing basis: Claude Sonnet 4.6 at ~$3/M input tokens, ~$15/M output tokens. Single model for all calls — no model-routing logic needed.
 
 Infrastructure costs (Railway) are negligible at all scales relative to LLM spend.
 
