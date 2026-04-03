@@ -34,8 +34,8 @@ export class ChatBridgeWsClient {
     }
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(this.token)}`
+      const wsBase = import.meta.env.VITE_CHATBRIDGE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
+      const url = `${wsBase}?token=${encodeURIComponent(this.token)}`
 
       const ws = new WebSocket(url)
       this.ws = ws
