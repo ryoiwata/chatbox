@@ -136,6 +136,56 @@ function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | undefined 
         },
       },
     ],
+    Chess: [
+      {
+        name: 'start_game',
+        description:
+          'Start a new chess game. Call this when the user wants to play chess.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            color: {
+              type: 'string',
+              enum: ['white', 'black'],
+              description: 'The color the user wants to play as. Defaults to white.',
+            },
+          },
+        },
+      },
+      {
+        name: 'make_move',
+        description:
+          'Make a chess move on the board using square coordinates. Use this to make moves for the AI opponent or when the user asks you to move a piece.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            from: {
+              type: 'string',
+              description: 'Source square in algebraic notation, e.g. e2',
+            },
+            to: {
+              type: 'string',
+              description: 'Destination square in algebraic notation, e.g. e4',
+            },
+            promotion: {
+              type: 'string',
+              enum: ['q', 'r', 'b', 'n'],
+              description: 'Piece to promote to (only needed for pawn promotion)',
+            },
+          },
+          required: ['from', 'to'],
+        },
+      },
+      {
+        name: 'get_board_state',
+        description:
+          'Get the current chess board position, whose turn it is, and game status. Use this to analyze the position when the user asks for help or suggestions.',
+        input_schema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+    ],
   }
 
   const tools = activeApps.flatMap((app) => allTools[app] ?? [])

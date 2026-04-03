@@ -38,6 +38,8 @@ app.get('/api/health', (_req, res) => {
 // App registry
 app.use('/api/apps', appsRouter)
 
+// Static: chess built SPA (must come before the generic /apps catch-all)
+app.use('/apps/chess', express.static(path.join(__dirname, '../../apps/chess/dist')))
 // Static: demo apps and built frontend (populated in later milestones)
 app.use('/apps', express.static(path.join(__dirname, '../../apps')))
 app.use(express.static(path.join(__dirname, '../../dist')))
