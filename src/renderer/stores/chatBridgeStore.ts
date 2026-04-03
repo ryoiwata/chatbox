@@ -9,15 +9,20 @@ type SessionState = {
   failureCounts: Record<string, number> // circuit breaker counts per app name
 }
 
-// Placeholder frame interface — replaced in M2 when ChatBridgeFrame.tsx exists
-type FrameHandle = {
-  invokeToolAndWait: (toolCallId: string, toolName: string, params: unknown) => Promise<unknown>
+type PendingToolCall = {
+  resolve: (result: unknown) => void
+  reject: (err: Error) => void
+  timeout: ReturnType<typeof setTimeout>
 }
+
+export type ToolInvoker = (toolCallId: string, toolName: string, params: unknown) => Promise<unknown>
 
 type ChatBridgeState = {
   registry: PluginManifest[]
   sessions: Record<string, SessionState>
   wsClient: ChatBridgeWsClient | null
+  pendingToolCalls: Record<string, PendingToolCall>
+  toolInvokers: Record<string, ToolInvoker | null>
 
   setRegistry: (apps: PluginManifest[]) => void
   activateSession: (sessionId: string) => void
@@ -29,7 +34,10 @@ type ChatBridgeState = {
   getWsClient: () => ChatBridgeWsClient | null
   setWsClient: (client: ChatBridgeWsClient) => void
   recordFailure: (sessionId: string, appName: string) => number
-  getActiveFrame: (sessionId: string) => FrameHandle
+  addPendingToolCall: (toolCallId: string, pending: PendingToolCall) => void
+  removePendingToolCall: (toolCallId: string) => void
+  setToolInvoker: (sessionId: string, fn: ToolInvoker | null) => void
+  getToolInvoker: (sessionId: string) => ToolInvoker | null
 }
 
 const makeEmptySession = (): SessionState => ({
@@ -43,6 +51,8 @@ export const chatBridgeStore = create<ChatBridgeState>()((set, get) => ({
   registry: [],
   sessions: {},
   wsClient: null,
+  pendingToolCalls: {},
+  toolInvokers: {},
 
   setRegistry: (apps) => set({ registry: apps }),
 
@@ -142,16 +152,27 @@ export const chatBridgeStore = create<ChatBridgeState>()((set, get) => ({
     return newCount
   },
 
-  getActiveFrame: (_sessionId) => {
-    // M2 placeholder — ChatBridgeFrame.tsx will register itself here
-    return {
-      invokeToolAndWait: async (toolCallId, toolName, _params) => {
-        console.warn('[ChatBridge] Tool call received but no iframe frame handler yet — M2 needed', {
-          toolCallId,
-          toolName,
-        })
-        return { error: 'iframe not ready' }
-      },
-    }
+  addPendingToolCall: (toolCallId, pending) => {
+    set((state) => ({
+      pendingToolCalls: { ...state.pendingToolCalls, [toolCallId]: pending },
+    }))
+  },
+
+  removePendingToolCall: (toolCallId) => {
+    set((state) => {
+      const next = { ...state.pendingToolCalls }
+      delete next[toolCallId]
+      return { pendingToolCalls: next }
+    })
+  },
+
+  setToolInvoker: (sessionId, fn) => {
+    set((state) => ({
+      toolInvokers: { ...state.toolInvokers, [sessionId]: fn },
+    }))
+  },
+
+  getToolInvoker: (sessionId) => {
+    return get().toolInvokers[sessionId] ?? null
   },
 }))
