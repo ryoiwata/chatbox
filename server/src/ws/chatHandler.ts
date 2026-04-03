@@ -215,6 +215,52 @@ function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | undefined 
         },
       },
     ],
+    Spotify: [
+      {
+        name: 'search_tracks',
+        description:
+          'Search for music tracks on Spotify. Returns track names, artists, album, and preview info. Use this to find songs before creating a playlist.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search query, e.g. "jazz piano", "Miles Davis", "upbeat pop 2020"',
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum number of results to return (default 5, max 20)',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'create_playlist',
+        description:
+          'Create a Spotify playlist and populate it with tracks. Searches for each track query and adds the best match. Requires Spotify to be connected first.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Playlist name, e.g. "Morning Jazz Vibes"',
+            },
+            description: {
+              type: 'string',
+              description: 'Optional playlist description',
+            },
+            trackQueries: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'Search queries for tracks to add, e.g. ["Miles Davis So What", "John Coltrane Giant Steps"]',
+            },
+          },
+          required: ['name', 'trackQueries'],
+        },
+      },
+    ],
   }
 
   const tools = activeApps.flatMap((app) => allTools[app] ?? [])

@@ -121,6 +121,47 @@ router.get('/', (_req, res) => {
       ],
       status: 'approved',
     },
+    {
+      id: 'spotify',
+      name: 'Spotify',
+      url: '/apps/spotify',
+      description:
+        'Spotify playlist creator. Search for tracks and create playlists using natural language. Requires Spotify OAuth.',
+      tools: [
+        {
+          name: 'search_tracks',
+          description: 'Search for music tracks on Spotify',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Search query, e.g. "jazz piano"' },
+              limit: { type: 'number', description: 'Max results (default 5)' },
+            },
+            required: ['query'],
+          },
+        },
+        {
+          name: 'create_playlist',
+          description: 'Create a Spotify playlist and add tracks to it',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Playlist name' },
+              description: { type: 'string', description: 'Optional description' },
+              trackQueries: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Search queries for tracks to add',
+              },
+            },
+            required: ['name', 'trackQueries'],
+          },
+        },
+      ],
+      status: 'approved',
+      authRequired: true,
+      authProvider: 'spotify',
+    },
   ])
 })
 

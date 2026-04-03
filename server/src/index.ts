@@ -10,6 +10,8 @@ import appsRouter from './routes/apps'
 import authRouter from './routes/auth'
 import conversationsRouter from './routes/conversations'
 import internalRouter from './routes/internal'
+import oauthRouter from './routes/oauth'
+import spotifyInternalRouter from './routes/spotify-internal'
 import { requireAuth } from './middleware/auth'
 import { authLimiter, apiLimiter } from './middleware/rateLimit'
 
@@ -56,9 +58,16 @@ app.use('/api/conversations', requireAuth, conversationsRouter)
 // Internal API proxy (no auth — server-side key protection)
 app.use('/api/internal', internalRouter)
 
-// Static: chess built SPA (must come before the generic /apps catch-all)
+// OAuth popup flow (public — JWT validated inside handler)
+app.use('/api/oauth', oauthRouter)
+
+// Spotify internal API (requires auth)
+app.use('/api/internal/spotify', requireAuth, spotifyInternalRouter)
+
+// Static: built SPAs (must come before the generic /apps catch-all)
 app.use('/apps/weather', express.static(path.join(__dirname, '../../apps/weather/dist')))
 app.use('/apps/chess', express.static(path.join(__dirname, '../../apps/chess/dist')))
+app.use('/apps/spotify', express.static(path.join(__dirname, '../../apps/spotify/dist')))
 // Static: demo apps and built frontend (populated in later milestones)
 app.use('/apps', express.static(path.join(__dirname, '../../apps')))
 app.use(express.static(path.join(__dirname, '../../dist')))

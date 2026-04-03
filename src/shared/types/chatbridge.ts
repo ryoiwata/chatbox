@@ -30,6 +30,7 @@ export const BridgeMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('state_update'), state: z.record(z.string(), z.unknown()) }),
   z.object({ type: z.literal('completion'), result: z.unknown() }),
   z.object({ type: z.literal('auth_token'), token: z.string(), provider: z.string() }),
+  z.object({ type: z.literal('oauth_request'), provider: z.string() }),
 ])
 
 export type ToolSchema = z.infer<typeof ToolSchemaSchema>

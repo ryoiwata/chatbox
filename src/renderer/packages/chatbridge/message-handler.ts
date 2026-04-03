@@ -2,14 +2,15 @@ import type { RefObject } from 'react'
 import { BridgeMessageSchema } from '../../../shared/types/chatbridge'
 import { chatBridgeStore } from '../../stores/chatBridgeStore'
 
-const KNOWN_TYPES = ['ready', 'register_tools', 'tool_result', 'state_update', 'completion'] as const
+const KNOWN_TYPES = ['ready', 'register_tools', 'tool_result', 'state_update', 'completion', 'oauth_request'] as const
 type KnownType = (typeof KNOWN_TYPES)[number]
 
 export function createMessageHandler(
   iframeRef: RefObject<HTMLIFrameElement | null>,
   sessionId: string,
   appName: string,
-  onReady: () => void
+  onReady: () => void,
+  onOAuthRequest?: (provider: string) => void
 ) {
   return function handleMessage(event: MessageEvent) {
     // 1. Source validation — primary security check.
@@ -60,6 +61,14 @@ export function createMessageHandler(
 
       case 'completion':
         console.log(`[ChatBridge] ${appName} completed:`, msg.result)
+        break
+
+      case 'oauth_request':
+        if (onOAuthRequest) {
+          onOAuthRequest(msg.provider)
+        } else {
+          console.warn(`[ChatBridge] ${appName} requested OAuth for ${msg.provider} but no handler registered`)
+        }
         break
     }
   }

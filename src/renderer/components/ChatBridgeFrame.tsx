@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
 import { createMessageHandler } from '../packages/chatbridge/message-handler'
+import { authStore, API_BASE } from '../stores/authStore'
 import { chatBridgeStore } from '../stores/chatBridgeStore'
 
 const READY_TIMEOUT_MS = 5_000
@@ -31,10 +32,16 @@ export function ChatBridgeFrame({ sessionId }: Props) {
   // Subscribe to the first active app name and its URL from the registry
   const activeApps = useStore(chatBridgeStore, (s) => s.sessions[sessionId]?.apps ?? [])
   const registry = useStore(chatBridgeStore, (s) => s.registry)
+  const token = useStore(authStore, (s) => s.token)
 
   const activeAppName = activeApps[0] ?? null
   const activeApp = registry.find((a) => a.name === activeAppName) ?? null
-  const appUrl = activeApp ? resolveAppUrl(activeApp.url) : null
+  const resolvedBase = activeApp ? resolveAppUrl(activeApp.url) : null
+  const appUrl = resolvedBase
+    ? activeApp?.authRequired && token
+      ? `${resolvedBase}?token=${encodeURIComponent(token)}`
+      : resolvedBase
+    : null
 
   // invokeToolAndWait: posts tool_invoke to iframe, returns a promise that resolves on tool_result
   const invokeToolAndWait = useCallback(
@@ -77,7 +84,20 @@ export function ChatBridgeFrame({ sessionId }: Props) {
       setStatus('ready')
     }
 
-    const handler = createMessageHandler(iframeRef, sessionId, activeAppName, onReady)
+    const handleOAuthRequest = (provider: string) => {
+      const currentToken = authStore.getState().token
+      if (!currentToken) {
+        console.warn('[ChatBridge] OAuth requested but user not authenticated')
+        return
+      }
+      window.open(
+        `${API_BASE}/api/oauth/${provider}/authorize?token=${encodeURIComponent(currentToken)}`,
+        `${provider}-oauth`,
+        'width=500,height=700,noopener=0'
+      )
+    }
+
+    const handler = createMessageHandler(iframeRef, sessionId, activeAppName, onReady, handleOAuthRequest)
     window.addEventListener('message', handler)
 
     const readyTimer = setTimeout(() => {
@@ -87,8 +107,21 @@ export function ChatBridgeFrame({ sessionId }: Props) {
       }
     }, READY_TIMEOUT_MS)
 
+    // Handle oauth_complete from popup windows — forward auth_ready to the iframe
+    const handleOAuthComplete = (event: MessageEvent) => {
+      const data = event.data as Record<string, unknown>
+      if (data?.type === 'oauth_complete' && typeof data.provider === 'string') {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: 'auth_ready', provider: data.provider },
+          '*'
+        )
+      }
+    }
+    window.addEventListener('message', handleOAuthComplete)
+
     return () => {
       window.removeEventListener('message', handler)
+      window.removeEventListener('message', handleOAuthComplete)
       clearTimeout(readyTimer)
     }
   }, [sessionId, activeAppName, retryKey])
@@ -139,7 +172,7 @@ export function ChatBridgeFrame({ sessionId }: Props) {
         )}
 
         <iframe
-          key={`${appUrl}-${retryKey}`}
+          key={`${resolvedBase}-${retryKey}`}
           ref={iframeRef}
           src={appUrl}
           sandbox="allow-scripts"
