@@ -1,82 +1,175 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## Project Overview
 
-Chatbox Community Edition is a multi-platform AI chat application supporting 30+ LLM providers. It runs as a desktop app (Electron), mobile app (Capacitor/iOS/Android), and web app from a single codebase.
+ChatBridge is a plugin system built on a fork of [Chatbox](https://github.com/Bin-Huang/chatbox) that enables third-party apps to register tools, render custom UI inside the chat via sandboxed iframes, and communicate bidirectionally with the LLM through a typed postMessage protocol. Targets K-12 education (TutorMeAI case study).
 
-## Common Commands
+**Stack:** React 18 · Zustand · TanStack Router/Query · Vite · Node.js/Express · WebSocket (`ws`) · PostgreSQL (Prisma) · OpenAI GPT-4o-mini/4o · iframe + postMessage
 
+**Do not suggest switching frameworks or languages.** The Chatbox fork and Express backend are intentional choices documented in the pre-search.
+
+## Reference Documents
+
+Read these before making architectural decisions:
+- `CODEBASE_ANALYSIS.md` — Chatbox codebase structure, extension points, file/line anchors. **Authoritative** — do not re-query codebase-memory-mcp for anything answered here.
+- `SPEC.md` — Plugin protocol, message types, security model, database schema.
+- `README.md` — Setup guide, API endpoints, plugin development docs.
+- `.claude/skills/` — Skills for Railway deployment, Prisma, WebSocket, React, Node.js patterns.
+
+## Commands
+
+### Frontend (Chatbox fork)
 ```bash
-# Development
-pnpm run dev              # Start Electron dev server with hot-reload
-pnpm run dev:web          # Web-only dev mode
-pnpm run dev:local        # Dev with USE_LOCAL_API=true
-
-# Build
-pnpm run build            # Build without packaging
-pnpm run build:web        # Web-only build
-pnpm run package          # Build + package for current platform
-
-# Testing
-pnpm run test             # Run all tests (Vitest)
-pnpm run test:watch       # Watch mode
-pnpm run test:coverage    # Coverage report
-pnpm run test:integration # Integration tests (300s timeout)
-
-# Code Quality
-pnpm run lint             # Biome lint check
-pnpm run lint:fix         # Auto-fix linting
-pnpm run format           # Biome format
-pnpm run check            # TypeScript type check (tsc --noEmit)
-
-# Mobile
-pnpm run mobile:sync      # Sync Capacitor (iOS + Android)
-pnpm run mobile:ios       # Open iOS project
-pnpm run mobile:android   # Open Android project
+pnpm install                          # Install dependencies
+pnpm run dev                          # Vite dev server (hot reload)
+pnpm run build:web                    # Production web build → dist/
+pnpm run typecheck                    # TypeScript type checking
 ```
 
-**Linter/Formatter**: Biome (not ESLint/Prettier). Run `pnpm run check:biome` for format checks.
-
-## Architecture
-
-The codebase is structured around Electron's process model:
-
-```
-src/
-├── main/        # Electron main process
-├── preload/     # Electron preload scripts (IPC bridge)
-├── renderer/    # React frontend (shared between Electron and web)
-└── shared/      # Code shared between main and renderer
+### Backend (Express server)
+```bash
+cd server
+npm install                           # Install dependencies
+npm run dev                           # Dev server with ts-node + nodemon
+npm run build                         # Compile TypeScript
+npm start                             # Start production server
+npx prisma migrate dev                # Run database migrations
+npx prisma studio                     # GUI for inspecting database
+npm run seed                          # Seed demo app registrations
 ```
 
-### Provider System (`src/shared/providers/`)
+### Testing
+```bash
+pnpm run typecheck                    # Frontend type checking
+cd server && npm test                 # Backend tests
+cd server && npm run test:watch       # Watch mode
+cd apps/chess && npm test             # Chess app tests
+```
 
-The core AI provider system uses a registry pattern. Providers are defined declaratively via `defineProvider()` in `src/shared/providers/definitions/` and registered in `src/shared/providers/registry.ts`. Model instances are created via `getModel()` which returns classes implementing `ModelInterface`. To add a new provider, see `docs/adding-new-provider.md`.
+### Linting & Formatting
+```bash
+pnpm run lint                         # Biome lint (frontend)
+cd server && npm run lint             # ESLint (backend)
+```
 
-### State Management
+## Environment Variables
 
-- **Jotai atoms** (`src/renderer/stores/atoms/`): Fine-grained reactive state
-- **Zustand stores** (`src/renderer/stores/`): Feature-level stores (e.g., `chatStore.ts`)
-- **electron-store**: Persistent settings, cached in main process
+### Backend (`server/.env`)
 
-### Chat Flow
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `OPENAI_API_KEY` | Yes | — | OpenAI API key for LLM calls |
+| `JWT_SECRET` | Yes | — | Secret for signing JWTs |
+| `PORT` | No | `3000` | Express server port |
+| `CLIENT_URL` | No | `http://localhost:5173` | Frontend URL (CORS) |
+| `SPOTIFY_CLIENT_ID` | No | — | Spotify OAuth (for Spotify app) |
+| `SPOTIFY_CLIENT_SECRET` | No | — | Spotify OAuth secret |
+| `WEATHER_API_KEY` | No | — | Weather API key |
 
-Messages go: React component → IPC call (via preload bridge) → main process → provider API → streaming response back to renderer. The `chatStore.ts` owns session state and history.
+## Project Structure
 
-### Platform Abstraction
+```
+chatbox/
+├── src/renderer/                      # Chatbox frontend (forked)
+│   ├── components/
+│   │   └── ChatBridgeFrame.tsx        # Plugin iframe container (NEW)
+│   ├── stores/
+│   │   └── chatBridgeStore.ts         # Plugin state — Zustand (NEW)
+│   ├── packages/
+│   │   ├── chatbridge/                # Plugin system (NEW)
+│   │   │   ├── controller.ts          # Plugin lifecycle: load, start, stop, getTools()
+│   │   │   └── tool-bridge.ts         # Schema → AI SDK ToolSet conversion
+│   │   └── model-calls/
+│   │       ├── stream-text.ts         # LLM pipeline (MODIFIED — inject ChatBridge tools at ~line 296)
+│   │       └── message-utils.ts       # System prompt (MODIFIED — inject app state context)
+│   └── shared/types/
+│       └── chatbridge.ts              # Plugin types — Zod schemas (NEW)
+├── server/                            # Express backend (NEW)
+│   ├── src/
+│   │   ├── index.ts                   # Express + WebSocket bootstrap
+│   │   ├── routes/                    # REST endpoints
+│   │   ├── middleware/                # Auth, rate limiting
+│   │   └── ws/                        # WebSocket chat handler
+│   └── prisma/schema.prisma           # Database schema
+├── apps/                              # Third-party demo apps (NEW)
+│   ├── chess/                         # Stateful game, no auth
+│   ├── weather/                       # External API, server-side key
+│   └── spotify/                       # OAuth2 flow
+└── docs/                              # Pre-search, architecture docs
+```
 
-`src/renderer/platform/` and `src/renderer/native/` isolate platform-specific code. Capacitor abstracts file system, device, and native APIs for iOS/Android. The web build excludes Electron-only APIs.
+## Key Extension Points (from CODEBASE_ANALYSIS.md)
 
-### MCP Integration
+| What | Where | Line |
+|---|---|---|
+| Tool set assembly | `src/renderer/packages/model-calls/stream-text.ts` | ~296 |
+| System prompt injection | `src/renderer/packages/model-calls/message-utils.ts` | ~119 |
+| Pre-generation hook | `src/renderer/stores/session/messages.ts` | ~111 |
+| Generation lifecycle | `src/renderer/stores/session/generation.ts` | ~110 |
+| iframe/postMessage pattern | `src/renderer/components/Artifact.tsx` | — |
+| MCP tool integration | `src/renderer/packages/mcp/controller.ts` | ~197 |
 
-Model Context Protocol spans both processes: `src/main/mcp/` handles the process-level transport, while `src/renderer/packages/mcp/` manages the renderer-side protocol state.
+## Architecture Rules
 
-### Key docs
+- **Two communication channels:** WebSocket (client ↔ server) for chat/LLM streaming. postMessage (parent ↔ iframe) for plugin communication. These are deliberately separate.
+- **Apps own their state.** The platform receives a copy via `state_update` postMessage for LLM context injection. The platform never writes app state.
+- **Selective tool injection.** Only inject schemas for actively opened apps, not all registered apps globally. This controls token cost.
+- **Thin plugin contract.** Apps register URL + tool schemas. Platform handles discovery and routing. Apps handle execution and state.
+- **Broken apps never break chat.** Tool timeouts inject error results into the conversation. The LLM handles them gracefully.
 
-- `docs/technical/ai-providers.md` — Detailed provider architecture
-- `docs/storage.md` — Data storage strategy (LibSQL)
-- `docs/testing.md` — Testing guide
-- `docs/adding-new-provider.md` — How to add a new AI provider
-- `ERROR_HANDLING.md` — Error handling patterns
+## Key Design Decisions
+
+- **Express backend added to a client-side app** — Chatbox is pure-client (IndexedDB, no server). We add a backend for user auth, persistent history, and OAuth token storage. LLM calls move server-side to protect API keys.
+- **iframe + postMessage for sandboxing** — Extends the existing `Artifact.tsx` pattern. Browser-enforced security boundary. Origin validated on every message.
+- **Custom JWT auth over managed service** — Avoids vendor dependency during a one-week sprint. Half-day implementation cost is acceptable.
+- **GPT-4o-mini default, GPT-4o for complex reasoning** — Keeps average tool invocation under $0.03. Chess analysis uses GPT-4o; routing uses mini.
+- **Prisma over raw SQL** — Typed queries match TypeScript-everywhere approach. Auto-generated migrations for a shifting schema.
+
+## Git Workflow
+
+### Conventional Commits
+```
+<type>(<scope>): <description>
+```
+
+**Types:** feat, fix, test, docs, refactor, chore, perf
+**Scopes:** chatbridge, server, auth, chess, weather, spotify, plugin, ws, prisma, deploy
+**Rules:** Lowercase, imperative mood, under 72 chars, no period.
+
+**Examples:**
+```
+feat(chatbridge): add postMessage handler for tool_invoke and tool_result
+feat(server): implement JWT auth with bcrypt password hashing
+feat(chess): add legal move validation with chess.js
+fix(chatbridge): handle tool invocation timeout with error injection
+test(server): add auth endpoint tests with supertest
+chore(prisma): add app_registrations and oauth_tokens tables
+docs: update SPEC.md with completion signaling protocol
+```
+
+### Auto-Commit Behavior
+
+After every meaningful change, commit with a conventional commit message. Run typecheck and relevant tests before committing. Do not accumulate uncommitted changes across tasks.
+
+## Rules
+
+- Read `CODEBASE_ANALYSIS.md` before modifying any Chatbox source file — it maps every extension point with file paths and line numbers
+- Read `SPEC.md` for the plugin protocol, message types, and security model
+- Read relevant `.claude/skills/` before using Railway, Prisma, WebSocket, or React patterns
+- Follow existing Chatbox patterns: Zustand for stores, Jotai for atoms, TanStack Router for routes, react-query for server state
+- All new types use Zod schemas with `z.infer<>` for TypeScript types — match Chatbox's existing pattern in `src/shared/types/`
+- Validate postMessage origin on every received message — never trust `event.data` without checking `event.origin` or `event.source`
+- Never send conversation history to third-party apps — only send the tool's declared parameters
+- Never expose `OPENAI_API_KEY` or `JWT_SECRET` to the client — these stay server-side only
+- iframe sandbox: `allow-scripts` by default. Add `allow-same-origin` only for trusted self-hosted demo apps.
+- Tool invocation timeout: 10 seconds default, configurable per app at registration
+- Error results are injected as normal tool results — the LLM handles them conversationally
+- Rate limit auth endpoints (10/min) and tool invocations (30/min per app per user)
+- Use `express-rate-limit` with JWT as the rate limit key
+- All database access goes through Prisma — no raw SQL
+- Always use Context7 MCP to look up library/API documentation when doing code generation, setup, configuration, or referencing external dependencies — do not rely on training data for docs that may be stale
+- Use sequential-thinking MCP for complex architectural decisions or multi-step debugging
+- Use codebase-memory-mcp for structural queries about the Chatbox codebase not covered in CODEBASE_ANALYSIS.md
