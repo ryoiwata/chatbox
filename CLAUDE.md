@@ -13,9 +13,11 @@ ChatBridge is a plugin system built on a fork of [Chatbox](https://github.com/Bi
 ## Reference Documents
 
 Read these before making architectural decisions:
-- `CODEBASE_ANALYSIS.md` — Chatbox codebase structure, extension points, file/line anchors. **Authoritative** — do not re-query codebase-memory-mcp for anything answered here.
-- `SPEC.md` — Plugin protocol, message types, security model, database schema.
-- `README.md` — Setup guide, API endpoints, plugin development docs.
+- `chatbridge/docs/CODEBASE_ANALYSIS.md` — Chatbox codebase structure, extension points, file/line anchors. **Read this file first before using codebase-memory-mcp.** It is authoritative for all structural questions it covers. Only query codebase-memory-mcp for questions not answered in this document (e.g., newly added files, call paths not mapped, or post-index changes).
+- `chatbridge/docs/SPEC.md` — Plugin protocol, message types, security model, database schema.
+- `chatbridge/docs/G4_Week_7_-_ChatBridge.md` — Full project requirements, deadlines, grading criteria, testing scenarios.
+- `chatbridge/README.md` — Setup guide, API endpoints, plugin development docs.
+- `.claude/rules/` — Code style, security, testing, and API contract rules.
 - `.claude/skills/` — Skills for Railway deployment, Prisma, WebSocket, React, Node.js patterns.
 
 ## Commands
@@ -98,10 +100,15 @@ chatbox/
 │   ├── chess/                         # Stateful game, no auth
 │   ├── weather/                       # External API, server-side key
 │   └── spotify/                       # OAuth2 flow
+├── chatbridge/                        # ChatBridge project docs
+│   └── docs/
+│       ├── CODEBASE_ANALYSIS.md       # Chatbox codebase reference (read before MCP queries)
+│       ├── SPEC.md                    # Plugin protocol spec
+│       └── G4_Week_7_-_ChatBridge.md  # Project requirements
 └── docs/                              # Pre-search, architecture docs
 ```
 
-## Key Extension Points (from CODEBASE_ANALYSIS.md)
+## Key Extension Points (from chatbridge/docs/CODEBASE_ANALYSIS.md)
 
 | What | Where | Line |
 |---|---|---|
@@ -156,8 +163,8 @@ After every meaningful change, commit with a conventional commit message. Run ty
 
 ## Rules
 
-- Read `CODEBASE_ANALYSIS.md` before modifying any Chatbox source file — it maps every extension point with file paths and line numbers
-- Read `SPEC.md` for the plugin protocol, message types, and security model
+- Read `chatbridge/docs/CODEBASE_ANALYSIS.md` before modifying any Chatbox source file — it maps every extension point with file paths and line numbers
+- Read `chatbridge/docs/SPEC.md` for the plugin protocol, message types, and security model
 - Read relevant `.claude/skills/` before using Railway, Prisma, WebSocket, or React patterns
 - Follow existing Chatbox patterns: Zustand for stores, Jotai for atoms, TanStack Router for routes, react-query for server state
 - All new types use Zod schemas with `z.infer<>` for TypeScript types — match Chatbox's existing pattern in `src/shared/types/`
@@ -172,4 +179,4 @@ After every meaningful change, commit with a conventional commit message. Run ty
 - All database access goes through Prisma — no raw SQL
 - Always use Context7 MCP to look up library/API documentation when doing code generation, setup, configuration, or referencing external dependencies — do not rely on training data for docs that may be stale
 - Use sequential-thinking MCP for complex architectural decisions or multi-step debugging
-- Use codebase-memory-mcp for structural queries about the Chatbox codebase not covered in CODEBASE_ANALYSIS.md
+- **codebase-memory-mcp workflow:** Always read `chatbridge/docs/CODEBASE_ANALYSIS.md` first. Only query codebase-memory-mcp when the question is not answered in that document — for example, tracing a call path not mapped there, finding a file added after the analysis was generated, or verifying a line number has not shifted. When you do query it, prefer `search_graph` and `trace_call_path` over reading files one by one.
