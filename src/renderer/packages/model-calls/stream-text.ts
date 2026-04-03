@@ -319,7 +319,10 @@ export async function streamText(
       }
     }
 
-    // ChatBridge: inject activate_app meta-tool
+    // ChatBridge: inject activate_app meta-tool AND registered app tools.
+    // App tools are injected here so the LLM can call them in the same turn as
+    // activate_app. Handlers poll for the iframe invoker (registered by ChatBridgeFrame
+    // after React mounts the iframe) so they work even if activate_app fired first.
     const chatBridgeRegistry = chatBridgeStore.getState().registry
     if (chatBridgeRegistry.length > 0) {
       const appListSummary = chatBridgeRegistry.map((a) => `${a.name} (${a.description})`).join(', ')
@@ -347,6 +350,64 @@ export async function streamText(
           }
         },
       })
+
+      // Inject each registered app's tools. The execute handler waits (up to 8 s)
+      // for the iframe invoker to be registered by ChatBridgeFrame's useEffect.
+      for (const app of chatBridgeRegistry) {
+        for (const appTool of app.tools) {
+          if (tools[appTool.name]) continue // don't shadow existing tools
+          const params = appTool.parameters as Record<string, unknown>
+          const properties = (params.properties as Record<string, { type?: string; description?: string; enum?: string[] }>) ?? {}
+          const required = (params.required as string[]) ?? []
+          const zodShape: Record<string, z.ZodTypeAny> = {}
+          for (const [key, val] of Object.entries(properties)) {
+            let zodType: z.ZodTypeAny
+            if (val.enum?.length) {
+              zodType = z.enum(val.enum as [string, ...string[]])
+            } else if (val.type === 'number') {
+              zodType = z.number()
+            } else if (val.type === 'boolean') {
+              zodType = z.boolean()
+            } else {
+              zodType = z.string()
+            }
+            if (val.description) zodType = zodType.describe(val.description)
+            if (!required.includes(key)) zodType = zodType.optional()
+            zodShape[key] = zodType
+          }
+          const inputSchema = Object.keys(zodShape).length > 0 ? z.object(zodShape) : z.object({})
+          // Capture loop variables for the closure
+          const capturedAppName = app.name
+          const capturedToolName = appTool.name
+          const capturedDescription = appTool.description
+          tools[capturedToolName] = tool({
+            description: `[${capturedAppName}] ${capturedDescription}`,
+            inputSchema,
+            execute: async (toolParams) => {
+              if (!sessionId) return { error: 'Session not available' }
+              // Poll until ChatBridgeFrame mounts and registers the invoker.
+              // The await lets React's render cycle run between polls.
+              let invoker = chatBridgeStore.getState().getToolInvoker(sessionId)
+              if (!invoker) {
+                const deadline = Date.now() + 8_000
+                while (!invoker && Date.now() < deadline) {
+                  await new Promise<void>((r) => setTimeout(r, 100))
+                  invoker = chatBridgeStore.getState().getToolInvoker(sessionId)
+                }
+              }
+              if (!invoker) {
+                return { error: `${capturedAppName} app is not ready. Ensure activate_app was called first.` }
+              }
+              const toolCallId = `cb-${Date.now()}-${Math.random().toString(36).slice(2)}`
+              try {
+                return await invoker(toolCallId, capturedToolName, toolParams)
+              } catch (err) {
+                return { error: err instanceof Error ? err.message : 'Tool invocation failed' }
+              }
+            },
+          })
+        }
+      }
     }
 
     console.debug('tools', tools)

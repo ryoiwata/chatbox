@@ -97,7 +97,7 @@ async function main(): Promise<void> {
       status: 'approved',
     },
   })
-  console.log(`App registration: ${chessApp.name} (${chessApp.status})\`)
+  console.log(`App registration: ${chessApp.name} (${chessApp.status})`)
 
   const weatherApp = await prisma.appRegistration.upsert({
     where: { id: 'weather' },

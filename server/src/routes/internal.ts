@@ -64,6 +64,27 @@ router.get('/weather', async (req, res) => {
     ])
 
     if (!currentRes.ok) {
+      if (currentRes.status === 401 || currentRes.status === 403) {
+        // Invalid/expired API key — fall through to mock data
+        console.warn('[Weather] API key rejected (status %d), returning mock data', currentRes.status)
+        res.json({
+          location,
+          temperature: 22,
+          feelsLike: 20,
+          humidity: 65,
+          description: 'partly cloudy (mock — WEATHER_API_KEY invalid)',
+          icon: '02d',
+          wind: { speed: 3.5, direction: 180 },
+          forecast: [
+            { day: 'Tomorrow', high: 24, low: 18, description: 'sunny', icon: '01d' },
+            { day: 'Day 3', high: 21, low: 16, description: 'light rain', icon: '10d' },
+            { day: 'Day 4', high: 23, low: 17, description: 'cloudy', icon: '03d' },
+            { day: 'Day 5', high: 25, low: 19, description: 'clear sky', icon: '01d' },
+          ],
+          mock: true,
+        })
+        return
+      }
       res.status(currentRes.status).json({ error: `Weather API error: ${currentRes.statusText}` })
       return
     }
