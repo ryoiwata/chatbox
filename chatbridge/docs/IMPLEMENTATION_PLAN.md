@@ -1,8 +1,74 @@
 # ChatBridge Implementation Plan
 
-> Generated 2026-04-02 from architecture interview. Covers every decision gap between SPEC.md and
-> actual build sequence. Read SPEC.md and CODEBASE_ANALYSIS.md first; this document adds the
-> _how_ and _in what order_.
+> Generated 2026-04-02 from architecture interview. Updated with schedule, fallbacks, and deliverable tracking.
+> Read SPEC.md and CODEBASE_ANALYSIS.md first; this document adds the _how_ and _in what order_.
+>
+> **LLM: Anthropic Claude Sonnet 4.6** (`claude-sonnet-4-6`) via `@anthropic-ai/sdk`. Single model for all calls.
+
+---
+
+## Day-by-Day Schedule
+
+| Day | Date | Focus | Milestones | Deliverables Due |
+|---|---|---|---|---|
+| **1** | Tue | Backend scaffold + frontend wiring | M0, M1 (start) | **Tuesday MVP: pre-search PDF + architecture video + basic chat deployed** |
+| **2** | Wed | Test app + iframe protocol + tool call loop | M1 (finish), M2, M3 (start) | — |
+| **3** | Thu | Tool call loop + chess app | M3 (finish), M4 (start) | — |
+| **4** | Fri | Chess polish + real auth + weather | M4 (finish), M5, M7 (start) | **Early submission: plugin system + chess + weather working** |
+| **5** | Sat | Auth UI + weather finish + Spotify start | M6, M7 (finish), M8 (start) | — |
+| **6** | Sun AM | Spotify finish + error handling + tests | M8 (finish), M9, M10 | Record demo video (not day 7) |
+| **7** | Sun PM | Deploy + polish + cost analysis + video | M11 + deliverables | **Final: deployed app + video + cost analysis + social post** |
+
+**Buffer:** Day 4 has M4+M5+M7 — if chess runs long, auth (M5) slides to day 5 and weather (M7) uses hardcoded auth. Day 7 PM is reserved for deployment and deliverables, not features.
+
+**Auth shortcut for M0-M4:** Milestones 0 through 4 use a hardcoded JWT for testing. Real auth middleware (M5) replaces this. Do not build M0-M4 assuming auth middleware exists.
+
+---
+
+## Deadline Checkpoints
+
+### Tuesday (24 hours) — Hard Gate
+
+| Requirement | What to ship |
+|---|---|
+| Pre-search document | Already done (PDF submitted) |
+| Architecture video (3-5 min) | Record after M0 is working. Show: architecture diagram, tech stack decisions, plugin protocol walkthrough, the generate.ts interception point |
+| Basic chat working | M0 deployed to Railway: Express + Postgres + WebSocket streaming via Claude. User sends message → Claude streams response. No plugins yet. |
+| Forked repo on GitLab | Push Chatbox fork with server/ directory and CLAUDE.md, SPEC.md, README.md |
+
+### Friday (4 days) — Early Submission
+
+| Requirement | Minimum shippable state |
+|---|---|
+| Full plugin system | M1-M3 complete: activate_app tool, iframe side panel, postMessage protocol, backend tool call loop |
+| Multiple apps working | Chess (M4) fully playable + Weather (M7) showing forecasts. Two apps minimum |
+| Auth | M5 complete: JWT endpoints work. Auth UI (M6) can be a simple form |
+| Deployed | Railway deployment (M11 done early, not day 7) |
+| Demo video | 3-5 min: chat + chess game + weather query + architecture explanation |
+
+### Sunday (7 days) — Final Submission
+
+| Requirement | What to ship |
+|---|---|
+| 3 working apps | Chess + Weather + Spotify (OAuth flow working) |
+| Polish | Error handling (M9), loading indicators, retry buttons |
+| AI cost analysis | Dev spend + projections (written day 7 — see tracking plan below) |
+| Demo video | Re-record if needed (recorded day 6) |
+| Social post | LinkedIn or X post with description, screenshots, @GauntletAI tag |
+| Documentation | README with setup guide, architecture overview, API docs, deployed link |
+
+---
+
+## Fallback Plan — What to Cut
+
+| If behind by... | Cut this | Ship this instead |
+|---|---|---|
+| Day 3 (chess not started) | Spotify OAuth entirely | Chess + Weather + a simple third app (e.g., calculator) |
+| Day 4 (chess not done) | Spotify and error handling polish | Working chess (even if rough) + Weather. Skeleton Spotify stubbed |
+| Day 5 (auth not done) | Auth UI polish | Backend auth works via curl. Frontend uses hardcoded demo token |
+| Day 6 (Spotify broken) | Full Spotify | Spotify loads, shows "Connect Spotify" button, OAuth popup opens. API call stubbed |
+
+**Minimum viable submission (worst case):** Chat works → chess full lifecycle → weather demonstrates routing → auth endpoints exist → deployed on Railway.
 
 ---
 
@@ -11,6 +77,7 @@
 | Topic | Decision |
 |---|---|
 | Build order | Thin backend scaffold → vertical slice (test-app) → chess → auth UI → weather → Spotify |
+| LLM provider | **Anthropic Claude Sonnet 4.6** (`claude-sonnet-4-6`) via `@anthropic-ai/sdk`. Single model for all calls — tool routing, chat, chess analysis. No model-switching logic needed. |
 | WS↔postMessage handoff | Client drives continuation (multi-turn, not mid-stream hold) |
 | Multi-tool sync | Collect all tool results, send batch to server in one message |
 | iframe placement | Side panel (Artifact.tsx pattern). Compact inline card in chat history. |
@@ -21,8 +88,27 @@
 | OAuth token path | Stays server-side. Callback → parent → iframe gets `auth_ready` signal only. Backend makes Spotify calls. |
 | App state → LLM | Client piggybacks `appContext` on every `user_message` WS payload. Backend stateless between calls. |
 | Auth UX | Real auth + `POST /api/auth/demo` for friction-free grading. Seed script creates demo user. |
-| History persistence | Messages in Postgres (platform contract). Optional `restore` signal to iframe. App state doesn't persist. |
-| Demo app priority | Chess (day 3-4) → Weather (day 5) → Spotify (day 6-7). |
+| History persistence | Messages in Postgres (platform contract). `restore` signal is a **stretch goal**. |
+| Weather tool path | Same client→iframe round-trip as chess. Iframe fetches from `/api/internal/weather`. |
+
+---
+
+## Anthropic Claude API — Key Differences from OpenAI
+
+Claude's tool use has a different wire format. These differences affect M0 and M3:
+
+| Aspect | OpenAI | Anthropic Claude |
+|---|---|---|
+| SDK package | `openai` | `@anthropic-ai/sdk` |
+| Env variable | `OPENAI_API_KEY` | `ANTHROPIC_API_KEY` |
+| Model string | `gpt-4o-mini` | `claude-sonnet-4-6` |
+| Tool schema field | `parameters` | `input_schema` |
+| Tool call in response | `message.tool_calls[].function` | `content[]` blocks with `type: "tool_use"` |
+| Tool result format | `{ role: "tool", tool_call_id, content }` | `{ type: "tool_result", tool_use_id, content }` inside a user message |
+| Stop reason for tools | `finish_reason: "tool_calls"` | `stop_reason: "tool_use"` |
+| Streaming tool calls | Accumulated from `delta.tool_calls` chunks | `content_block_start` (type=tool_use) + `input_json_delta` events |
+| System prompt | `messages[0].role = "system"` | Separate `system` parameter |
+| Max tokens | Optional (has default) | **Required** — must set `max_tokens` |
 
 ---
 
@@ -32,49 +118,123 @@
 1. User sends "let's play chess" in chat
 2. Chatbox client-side pipeline runs (normal)
 3. streamText at line ~296: activate_app tool is in scope
-4. LLM calls activate_app({ appName: "chess" })
+4. Claude calls activate_app({ appName: "chess" })
 5. activate_app.execute():
    - Fetches chess app from chatBridgeStore registry
    - Opens WebSocket to wss://{host}/ws?token={jwt}
    - Sets chatBridgeStore.sessions[sessionId] = { active: true, apps: ['chess'] }
    - Opens ChatBridgeFrame side panel with chess iframe URL
    - Returns { status: 'activated', app: 'chess', tools: ['start_game', 'make_move', 'get_board_state'] }
-6. Chatbox finishes that turn normally (LLM responds "Chess activated! Starting a game...")
+6. Chatbox finishes that turn normally (Claude responds "Chess activated! Starting a game...")
 
 --- ALL SUBSEQUENT MESSAGES GO THROUGH BACKEND WS ---
 
-7. LLM calls start_game({ color: 'white' })
-   (backend gets this from OpenAI, sends { type: 'tool_call', toolCallId, toolName, params } to client)
-8. Client receives tool_call, forwards to chess iframe:
-   iframeRef.current?.contentWindow?.postMessage({ type: 'tool_invoke', toolCallId, toolName: 'start_game', params }, '*')
-9. Chess iframe: initializes game, renders board, sends:
-   { type: 'tool_result', toolCallId, result: { fen: '...initial FEN...', message: 'Game started' } }
-10. Client receives tool_result postMessage (validates event.source === iframeRef)
-11. Client sends { type: 'tool_result', toolCallId, result } to backend via WS
-12. Backend feeds tool result into conversation, calls OpenAI for continuation
-13. LLM streams "Game started! You're playing white. Make your move." → tokens flow to client
-14. User drags piece on board → chess.js validates → chess app sends state_update → chatBridgeStore updates
-15. User asks "what should I do?" →
-    client sends WS message: { type: 'user_message', content: '...', appContext: { states: { chess: { fen: '...' } } } }
-16. Backend builds system prompt with FEN context → LLM analyzes → streams response
+7. Claude calls start_game({ color: 'white' }) via tool_use content block
+   (backend extracts tool_use block, sends { type: 'tool_call', toolCallId, toolName, params } to client)
+8. Client receives tool_call, forwards to chess iframe via postMessage
+9. Chess iframe: initializes game, renders board, sends tool_result back
+10. Client receives tool_result (validates event.source), sends to backend via WS
+11. Backend builds tool_result message for Anthropic API, calls Claude for continuation
+12. Claude streams "Game started! You're playing white." → tokens flow to client
+13. User drags piece → chess.js validates → app sends state_update → chatBridgeStore updates
+14. User asks "what should I do?" →
+    client sends WS: { type: 'user_message', content: '...', appContext: { states: { chess: { fen: '...' } } } }
+15. Backend builds system prompt with FEN context → Claude analyzes → streams response
+```
+
+---
+
+## The `generation.ts` Modification (Critical Diff)
+
+This is the single most important change to Chatbox core code. The interception happens in `src/renderer/stores/session/generation.ts` at approximately line 110, inside the `generate()` function.
+
+**Current code (simplified):**
+```typescript
+export async function generate(
+  sessionId: string,
+  targetMsg: Message,
+  options?: { operationType?: string }
+) {
+  const promptMsgs = await genMessageContext(settings, messages, /* ... */)
+  await streamText(model, {
+    sessionId,
+    messages: promptMsgs,
+    onResultChange: (result) => {
+      modifyMessageCache(sessionId, targetMsg, result)
+    },
+  })
+}
+```
+
+**Modified code:**
+```typescript
+export async function generate(
+  sessionId: string,
+  targetMsg: Message,
+  options?: { operationType?: string }
+) {
+  // === CHATBRIDGE INTERCEPTION ===
+  if (chatBridgeStore.getState().isActive(sessionId)) {
+    const wsClient = chatBridgeStore.getState().getWsClient()
+    const appContext = chatBridgeStore.getState().getAppContext(sessionId)
+    
+    await wsClient.sendUserMessage({
+      conversationId: sessionId,
+      content: targetMsg.contentParts.find(p => p.type === 'text')?.text ?? '',
+      appContext,
+    }, {
+      onToken: (token) => {
+        modifyMessageCache(sessionId, targetMsg, { text: token, append: true })
+      },
+      onToolCall: async ({ toolCallId, toolName, params }) => {
+        const frame = chatBridgeStore.getState().getActiveFrame(sessionId)
+        const result = await frame.invokeToolAndWait(toolCallId, toolName, params)
+        wsClient.sendToolResult(toolCallId, result)
+      },
+      onDone: () => {
+        modifyMessage(sessionId, targetMsg, true, false)
+      },
+      onError: (msg) => {
+        targetMsg.error = msg
+        modifyMessage(sessionId, targetMsg, true, false)
+      }
+    })
+    return
+  }
+  // === END CHATBRIDGE INTERCEPTION ===
+
+  // ... existing Chatbox code unchanged below ...
+  const promptMsgs = await genMessageContext(settings, messages, /* ... */)
+  await streamText(model, { /* ... */ })
+}
 ```
 
 ---
 
 ## Milestone 0 — Thin Backend Scaffold
-**Goal:** Express + Postgres + WebSocket streaming, one hardcoded user. Nothing else.
-**Time estimate:** Day 1 morning
+**Goal:** Express + Postgres + WebSocket streaming via Anthropic Claude. One hardcoded user.
+**Time:** Day 1 morning
+**Auth:** Hardcoded JWT — no real auth middleware yet.
 
 ### Files to Create
 | File | Purpose |
 |---|---|
-| `server/package.json` | Node.js project: express, ws, openai, @prisma/client, jsonwebtoken, bcrypt, zod |
+| `server/package.json` | express, ws, `@anthropic-ai/sdk`, @prisma/client, jsonwebtoken, bcrypt, zod |
 | `server/tsconfig.json` | TypeScript strict mode, target: ES2022, outDir: dist/ |
 | `server/prisma/schema.prisma` | Minimal schema: User, Conversation, Message only |
-| `server/src/index.ts` | Express bootstrap, attach WebSocket server, static file serving for /apps/* and dist/ |
-| `server/src/ws/chatHandler.ts` | WebSocket connection handler: authenticate JWT from query string, stream OpenAI response back |
+| `server/src/index.ts` | Express bootstrap, WebSocket server, static file serving |
+| `server/src/ws/chatHandler.ts` | WebSocket handler: stream Anthropic response back |
+| `server/src/lib/anthropic.ts` | Anthropic client singleton: `new Anthropic()` |
 | `server/src/lib/prisma.ts` | Prisma client singleton |
-| `server/.env.example` | `DATABASE_URL`, `OPENAI_API_KEY`, `JWT_SECRET`, `PORT`, `CLIENT_URL` |
+| `server/.env.example` | `DATABASE_URL`, `ANTHROPIC_API_KEY`, `JWT_SECRET`, `PORT` |
+
+### Anthropic client setup (`server/src/lib/anthropic.ts`)
+```typescript
+import Anthropic from '@anthropic-ai/sdk'
+
+// Reads ANTHROPIC_API_KEY from process.env automatically
+export const anthropic = new Anthropic()
+```
 
 ### Minimal Prisma Schema
 ```prisma
@@ -112,796 +272,170 @@ model Message {
 }
 ```
 
-### WebSocket chatHandler contract
-- Authenticate: `ws://{host}/ws?token={jwt}` — verify JWT on upgrade, reject with code 4001 if invalid
-- Receive: `{ type: 'user_message', conversationId, content, appContext? }`
-- Send (streaming): `{ type: 'token', data: '...' }` per chunk
-- Send (tool call): `{ type: 'tool_call', toolCallId, toolName, params }`
-- Receive (tool result): `{ type: 'tool_result', toolCallId, result }`
-- Send (done): `{ type: 'done' }`
-- Send (error): `{ type: 'error', message: '...' }`
-
 ### Acceptance Criteria
 - [ ] `cd server && npm run dev` starts without errors
-- [ ] `wscat -c 'ws://localhost:3000/ws?token=HARDCODED_TEST_TOKEN'` connects
-- [ ] Sending `{ type: 'user_message', conversationId: 'test', content: 'hello' }` streams back tokens
-- [ ] `npx prisma studio` shows User, Conversation, Message tables
-
----
-
-## Milestone 1 — Frontend Wiring: chatBridgeStore + activate_app
-**Goal:** The Chatbox frontend gains awareness of ChatBridge. activate_app tool exists and works.
-**Time estimate:** Day 1 afternoon — Day 2 morning
-**Depends on:** Milestone 0 (WebSocket endpoint must exist)
-
-### Files to Create
-| File | Purpose |
-|---|---|
-| `src/shared/types/chatbridge.ts` | Zod schemas: ToolSchemaSchema, PluginManifestSchema, BridgeMessageSchema, ChatBridgeSessionState |
-| `src/renderer/stores/chatBridgeStore.ts` | Zustand: plugin registry, session state, active apps, app state snapshots |
-| `src/renderer/packages/chatbridge/controller.ts` | Plugin lifecycle: loadRegistry(), activate(), deactivate(), getActiveTools() |
-| `src/renderer/packages/chatbridge/ws-client.ts` | WebSocket client: connect, send, receive, reconnect, heartbeat |
-
-### Files to Modify
-| File | Change | Line |
-|---|---|---|
-| `src/renderer/packages/model-calls/stream-text.ts` | Inject `activate_app` into tool set. `activate_app.execute()` calls `chatBridgeController.activate()`, opens WS, updates store. | ~296 |
-| `src/renderer/stores/session/generation.ts` | Add conditional branch at top of `generate()`: if `chatBridgeStore.isActive(sessionId)`, call `chatBridgeWsClient.send()` instead of normal streamText pipeline | ~110 |
-
-### chatBridgeStore shape
-```typescript
-type ChatBridgeStore = {
-  // App registry (from GET /api/apps, fetched once on app load)
-  registry: PluginManifest[]
-
-  // Per-session state
-  sessions: Map<string, {
-    active: boolean
-    apps: string[]                          // active app IDs
-    appStates: Record<string, unknown>      // latest state_update per app
-    failureCounts: Record<string, number>   // for circuit breaker
-  }>
-
-  // Pending tool calls (toolCallId → resolve/reject)
-  pendingToolCalls: Map<string, {
-    resolve: (result: unknown) => void
-    reject: (err: Error) => void
-    timeout: ReturnType<typeof setTimeout>
-  }>
-
-  // Actions
-  setRegistry: (apps: PluginManifest[]) => void
-  activateSession: (sessionId: string) => void
-  activateApp: (sessionId: string, appId: string) => void
-  deactivateApp: (sessionId: string, appId: string) => void
-  updateAppState: (sessionId: string, appId: string, state: unknown) => void
-  isActive: (sessionId: string) => boolean
-  getAppContext: (sessionId: string) => Record<string, unknown>
-  recordFailure: (sessionId: string, appId: string) => number  // returns new count
-}
-```
-
-### activate_app tool (injected into stream-text.ts:296)
-```typescript
-const activateAppTool: Tool = {
-  description: `Activate a third-party application. Available apps: ${appListSummary}`,
-  parameters: z.object({
-    appName: z.string().describe('Name of the app to activate (e.g., "chess", "weather", "spotify")')
-  }),
-  execute: async ({ appName }, { toolCallId }) => {
-    const app = chatBridgeStore.getState().registry.find(a =>
-      a.name.toLowerCase() === appName.toLowerCase()
-    )
-    if (!app) return { error: `App "${appName}" not found. Available: ${appNames.join(', ')}` }
-
-    // Opens WebSocket, activates session, triggers iframe open via store
-    await chatBridgeController.activate(currentSessionId, app)
-    return {
-      status: 'activated',
-      app: app.name,
-      tools: app.tools.map(t => t.name),
-      description: app.description
-    }
-  }
-}
-```
-
-### Acceptance Criteria
-- [ ] `chatBridgeStore.getState().registry` is populated from `/api/apps` on app load
-- [ ] Saying "activate test app" in chat → LLM calls `activate_app` → store updated, no errors
-- [ ] `chatBridgeStore.getState().isActive(sessionId)` returns `true` after activation
-- [ ] Second message after activation → `generate()` takes the WebSocket branch
-
----
-
-## Milestone 2 — Test App + iframe + postMessage Protocol
-**Goal:** The full postMessage protocol works end-to-end with the minimal test app. No chess yet.
-**Time estimate:** Day 2
-**Depends on:** Milestone 1
-
-### Files to Create
-| File | Purpose |
-|---|---|
-| `apps/test-app/index.html` | ~30-line HTML: sends ready, registers dummy_tool, responds to tool_invoke with canned result, sends state_update on timer, sends completion after 3 invocations |
-| `src/renderer/components/ChatBridgeFrame.tsx` | Side panel iframe: renders when a session has active apps, handles postMessage in/out |
-| `src/renderer/packages/chatbridge/message-handler.ts` | Validates and dispatches incoming postMessage (source check → type check → Zod parse → route to store) |
-
-### ChatBridgeFrame responsibilities
-1. Renders `<iframe sandbox="allow-scripts" src={app.url} ref={iframeRef} />`
-2. `useEffect` registers `window.addEventListener('message', handleMessage)` with cleanup
-3. On iframe `load`: sends `{ type: 'ready_ack' }` back (or waits for `{ type: 'ready' }` from iframe with 5s timeout)
-4. Exposes `sendToolInvoke(toolCallId, toolName, params)` — called by ws-client when server sends `tool_call`
-5. On `tool_result` received: resolves the pending Promise in `chatBridgeStore.pendingToolCalls`
-
-### postMessage validation (message-handler.ts)
-```typescript
-function handleMessage(event: MessageEvent, iframeRef: RefObject<HTMLIFrameElement>) {
-  // 1. Source validation — primary security check
-  if (event.source !== iframeRef.current?.contentWindow) return
-
-  // 2. Type exists and is known
-  const knownTypes = ['ready', 'register_tools', 'tool_result', 'state_update', 'completion']
-  if (!event.data?.type || !knownTypes.includes(event.data.type)) return
-
-  // 3. Structural validation
-  const parsed = BridgeMessageSchema.safeParse(event.data)
-  if (!parsed.success) return
-
-  // 4. Dispatch
-  dispatch(parsed.data)
-}
-```
-
-### Test app (apps/test-app/index.html)
-```html
-<!DOCTYPE html>
-<html>
-<head><title>ChatBridge Test App</title></head>
-<body>
-<script>
-  let invocationCount = 0
-
-  // 1. Announce ready
-  window.parent.postMessage({ type: 'ready' }, '*')
-
-  // 2. Register a dummy tool
-  window.parent.postMessage({
-    type: 'register_tools',
-    schemas: [{
-      name: 'dummy_action',
-      description: 'A test tool that always succeeds',
-      parameters: { type: 'object', properties: { message: { type: 'string' } } }
-    }]
-  }, '*')
-
-  // 3. Listen for tool invocations
-  window.addEventListener('message', (event) => {
-    if (event.data?.type === 'tool_invoke') {
-      invocationCount++
-      setTimeout(() => {
-        window.parent.postMessage({
-          type: 'tool_result',
-          toolCallId: event.data.toolCallId,
-          result: { success: true, invocationCount, message: `Test response #${invocationCount}` }
-        }, '*')
-        // Send state_update after each invocation
-        window.parent.postMessage({
-          type: 'state_update',
-          state: { invocationCount, lastAction: event.data.toolName }
-        }, '*')
-        // Completion after 3 invocations
-        if (invocationCount >= 3) {
-          window.parent.postMessage({ type: 'completion', result: { totalInvocations: 3 } }, '*')
-        }
-      }, 100)
-    }
-  })
-</script>
-</body>
-</html>
-```
-
-### Acceptance Criteria
-- [ ] Test app iframe loads in side panel
-- [ ] Console shows `[ChatBridge] App ready: test-app`
-- [ ] LLM can call `dummy_action` → tool result received → LLM continues
-- [ ] `chatBridgeStore.getState().sessions[sessionId].appStates` updates after each `state_update`
-- [ ] After 3 invocations: `completion` signal received, system message appears in chat
-- [ ] Timeout: artificially delay tool_result in test app → 10s → error result injected, LLM responds gracefully
+- [ ] WebSocket connects with hardcoded token
+- [ ] `{ type: 'user_message', content: 'hello' }` → Claude streams tokens back
+- [ ] `npx prisma studio` shows tables
+- [ ] **Deploy to Railway immediately** for Tuesday checkpoint
 
 ---
 
 ## Milestone 3 — Full Vertical Slice: Backend Tool Call Loop
-**Goal:** Complete end-to-end with test app through the backend.
-**Time estimate:** Day 2-3
+**Goal:** Complete end-to-end with test app through the backend using Anthropic's tool use API.
+**Time:** Day 2-3
 **Depends on:** Milestones 1 and 2
+**Auth:** Hardcoded JWT.
 
-### Backend changes needed
-**`server/src/ws/chatHandler.ts` — expand to handle tool call loop:**
+### Anthropic tool call loop (`server/src/ws/chatHandler.ts`)
 
 ```typescript
+import { anthropic } from '../lib/anthropic'
+
 async function handleUserMessage(ws, { conversationId, content, appContext }, userId) {
-  // 1. Load conversation history from Postgres
   const history = await loadHistory(conversationId)
-
-  // 2. Build system prompt with app context
   const systemPrompt = buildSystemPrompt(appContext)
+  const tools = getAnthropicTools(appContext?.activeApps)
 
-  // 3. Stream OpenAI response
-  const stream = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content }],
-    tools: getToolSchemas(appContext?.activeApps),
-    stream: true
+  // Stream Claude's response
+  const stream = anthropic.messages.stream({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: [...history, { role: 'user', content }],
+    tools,
   })
 
-  // 4. Process stream
-  let toolCalls: ToolCall[] = []
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta
-    if (delta?.content) ws.send(JSON.stringify({ type: 'token', data: delta.content }))
-    if (delta?.tool_calls) accumulate(toolCalls, delta.tool_calls)
-  }
+  let toolUseBlocks: Array<{ id: string; name: string; input: unknown }> = []
 
-  // 5. If tool calls, send to client and wait for results
-  if (toolCalls.length > 0) {
-    const results = await Promise.all(toolCalls.map(tc => {
-      ws.send(JSON.stringify({ type: 'tool_call', toolCallId: tc.id, toolName: tc.function.name, params: JSON.parse(tc.function.arguments) }))
-      return waitForToolResult(ws, tc.id, 10_000)  // 10s timeout
+  stream.on('text', (text) => {
+    ws.send(JSON.stringify({ type: 'token', data: text }))
+  })
+
+  stream.on('contentBlock', (block) => {
+    if (block.type === 'tool_use') {
+      toolUseBlocks.push({ id: block.id, name: block.name, input: block.input })
+    }
+  })
+
+  const finalMessage = await stream.finalMessage()
+
+  if (finalMessage.stop_reason === 'tool_use' && toolUseBlocks.length > 0) {
+    // Send each tool call to client, collect results
+    const results = await Promise.all(toolUseBlocks.map(tc => {
+      ws.send(JSON.stringify({
+        type: 'tool_call', toolCallId: tc.id,
+        toolName: tc.name, params: tc.input
+      }))
+      return waitForToolResult(ws, tc.id, 10_000)
     }))
-    // Persist tool messages, recurse for continuation turn
-    await persistMessages(conversationId, toolCalls, results)
-    await handleUserMessage(ws, { conversationId, content: '', appContext }, userId)  // continuation
+
+    // Build continuation messages in Anthropic format
+    const toolResultContent = toolUseBlocks.map((tc, i) => ({
+      type: 'tool_result' as const,
+      tool_use_id: tc.id,
+      content: JSON.stringify(results[i])
+    }))
+
+    await persistMessages(conversationId, toolUseBlocks, results)
+
+    // Continue: assistant message (with tool_use blocks) + user message (with tool_results)
+    const continuationHistory = [
+      ...history,
+      { role: 'user' as const, content },
+      { role: 'assistant' as const, content: finalMessage.content },
+      { role: 'user' as const, content: toolResultContent }
+    ]
+    await handleContinuation(ws, conversationId, continuationHistory, systemPrompt, tools, userId)
     return
   }
 
   ws.send(JSON.stringify({ type: 'done' }))
-  await persistMessages(conversationId, [{ role: 'user', content }], [/* assistant response */])
+  await persistMessages(conversationId, finalMessage)
 }
-```
 
-**`waitForToolResult`**: registers a one-time listener on the WS connection for `{ type: 'tool_result', toolCallId }`, rejects after timeout.
-
-### ws-client.ts (frontend) — handle incoming tool_call from server
-```typescript
-wsClient.on('tool_call', ({ toolCallId, toolName, params }) => {
-  const activeFrame = chatBridgeStore.getState().getActiveFrame(sessionId)
-  activeFrame.sendToolInvoke(toolCallId, toolName, params)
-  // The postMessage response will resolve the pending Promise in chatBridgeStore
-  // That resolution sends tool_result back to the server
-})
-```
-
-### Acceptance Criteria
-- [ ] "Use the dummy action" → LLM calls `dummy_action` → server sends `tool_call` to client → client forwards to test-app iframe → result returns → server sends continuation → LLM responds
-- [ ] Multi-tool: LLM calls `dummy_action` twice in one turn → both results collected → continuation turn works
-- [ ] Tool timeout: test app delays 11s → server receives error result → LLM responds with friendly message
-- [ ] Messages persisted to Postgres (check with Prisma Studio)
-
----
-
-## Milestone 4 — Chess App
-**Goal:** Full chess game playable through ChatBridge. Most complex demo app.
-**Time estimate:** Day 3-4
-**Depends on:** Milestone 3 (full tool call loop proven)
-
-### Files to Create
-| File | Purpose |
-|---|---|
-| `apps/chess/package.json` | React + Vite SPA: react-chessboard, chess.js |
-| `apps/chess/src/main.tsx` | Entry: render `<ChessApp />` |
-| `apps/chess/src/App.tsx` | Board component, postMessage protocol, game state |
-| `apps/chess/src/hooks/useChessProtocol.ts` | postMessage in/out: tool_invoke handling, state_update sending |
-
-### Chess tools (registered in Postgres via seed, injected by backend when chess is active)
-```typescript
-const chessTools = [
-  {
-    name: 'start_game',
-    description: 'Start a new chess game',
-    parameters: {
-      type: 'object',
-      properties: {
-        color: { type: 'string', enum: ['white', 'black'], description: 'Player color' }
-      }
-    }
-  },
-  {
-    name: 'make_move',
-    description: 'Make a chess move using algebraic notation',
-    parameters: {
-      type: 'object',
-      properties: {
-        from: { type: 'string', description: 'Source square e.g. e2' },
-        to: { type: 'string', description: 'Destination square e.g. e4' },
-        promotion: { type: 'string', enum: ['q','r','b','n'], description: 'Pawn promotion piece (optional)' }
-      },
-      required: ['from', 'to']
-    }
-  },
-  {
-    name: 'get_board_state',
-    description: 'Get the current board position as FEN string and game status',
-    parameters: { type: 'object', properties: {} }
-  }
-]
-```
-
-### Chess App protocol implementation
-```typescript
-// On mount:
-window.parent.postMessage({ type: 'ready' }, '*')
-window.parent.postMessage({ type: 'register_tools', schemas: chessTools }, '*')
-
-// Handle tool_invoke:
-window.addEventListener('message', (event) => {
-  if (event.data?.type !== 'tool_invoke') return
-  const { toolCallId, toolName, params } = event.data
-
-  if (toolName === 'start_game') {
-    const game = new Chess()
-    setGame(game)
-    setPlayerColor(params.color ?? 'white')
-    sendToolResult(toolCallId, { fen: game.fen(), message: `Game started. You're playing ${params.color ?? 'white'}.` })
-  }
-
-  if (toolName === 'make_move') {
-    const result = game.move({ from: params.from, to: params.to, promotion: params.promotion })
-    if (!result) {
-      sendToolResult(toolCallId, { error: `Illegal move: ${params.from} to ${params.to}` })
-    } else {
-      sendStateUpdate()
-      sendToolResult(toolCallId, { fen: game.fen(), move: result.san, check: game.inCheck() })
-      if (game.isGameOver()) sendCompletion()
-    }
-  }
-
-  if (toolName === 'get_board_state') {
-    sendToolResult(toolCallId, { fen: game.fen(), turn: game.turn(), moveCount: game.history().length })
-  }
-})
-
-// Direct piece drag (user move — NOT through LLM):
-function onPieceDrop(from, to) {
-  const result = game.move({ from, to })
-  if (!result) return false  // react-chessboard rejects illegal move
-  sendStateUpdate()
-  if (game.isGameOver()) sendCompletion()
-  return true
-}
-```
-
-### Backend: inject chess tools when chess is active
-When `appContext.activeApps` includes `'chess'`, the backend fetches chess tool schemas from Postgres (`AppRegistration.toolSchemas`) and adds them to the OpenAI function list alongside `activate_app`.
-
-### Seed data
-`server/prisma/seed.ts` creates:
-- Demo user: `demo@chatbridge.app` / `demo123`
-- Chess app registration with `status: 'approved'`
-- Test app registration with `status: 'approved'`
-
-### Acceptance Criteria
-- [ ] "Let's play chess" → `activate_app` → chess iframe opens → LLM calls `start_game` → board renders
-- [ ] User drags a piece → board updates → `state_update` sent → `chatBridgeStore` updated
-- [ ] "What should I do here?" → current FEN in system prompt → LLM analyzes position
-- [ ] LLM calls `make_move` with a suggestion → board executes it
-- [ ] `make_move` with illegal move → error result → LLM responds "that move isn't valid"
-- [ ] Checkmate → `completion` signal → system message in chat
-
----
-
-## Milestone 5 — Real Auth
-**Goal:** JWT auth endpoints, middleware, rate limiting, seed script, demo endpoint.
-**Time estimate:** Day 4
-**Depends on:** Milestone 0 (Prisma + Express)
-
-### Files to Create/Expand
-| File | Purpose |
-|---|---|
-| `server/src/routes/auth.ts` | POST /api/auth/register, /login, /refresh, /demo |
-| `server/src/routes/apps.ts` | GET /api/apps, POST /api/apps/register, PATCH /api/apps/:id/status |
-| `server/src/routes/conversations.ts` | GET/POST/DELETE /api/conversations, GET /api/conversations/:id |
-| `server/src/middleware/auth.ts` | JWT verification, attaches `req.user` |
-| `server/src/middleware/rateLimit.ts` | express-rate-limit configs for auth (10/min) and API (60/min) |
-| `server/prisma/schema.prisma` | Add AppRegistration, OAuthToken, ToolInvocation models |
-| `server/prisma/seed.ts` | Creates demo user + demo app registrations |
-
-### POST /api/auth/demo
-```typescript
-router.post('/demo', asyncHandler(async (req, res) => {
-  const demoUser = await prisma.user.findUnique({ where: { email: 'demo@chatbridge.app' } })
-  if (!demoUser) return res.status(503).json({ error: 'Demo not configured' })
-  const token = jwt.sign({ userId: demoUser.id }, process.env.JWT_SECRET!, { expiresIn: '24h' })
-  res.json({ token, user: { id: demoUser.id, email: demoUser.email } })
-}))
-```
-
-### Full AppRegistration schema
-```prisma
-model AppRegistration {
-  id           String   @id @default(uuid())
-  name         String
-  url          String
-  description  String
-  toolSchemas  Json     @map("tool_schemas")
-  status       String   @default("pending")
-  timeout      Int      @default(10000) // ms
-  createdAt    DateTime @default(now()) @map("created_at")
-  toolInvocations ToolInvocation[]
+// Convert tool schemas to Anthropic format
+function getAnthropicTools(activeApps?: string[]) {
+  return appSchemas.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    input_schema: tool.parameters  // Same JSON Schema, different field name
+  }))
 }
 ```
 
 ### Acceptance Criteria
-- [ ] `POST /api/auth/register` → 201 with JWT
-- [ ] `POST /api/auth/login` → 200 with JWT / 401 for wrong password
-- [ ] `POST /api/auth/demo` → JWT for demo user
-- [ ] Protected routes return 401 without JWT
-- [ ] Rate limit: 11th login attempt in 60s → 429
-- [ ] `npm run seed` creates demo user and 3 approved app registrations
-- [ ] `GET /api/apps` returns only approved apps with tool schemas
+- [ ] "Use the dummy action" → full round-trip → Claude responds
+- [ ] Multi-tool: Claude calls tools in one turn → all results collected → continuation works
+- [ ] Tool timeout: 11s delay → error result → Claude responds gracefully
+- [ ] Messages persisted to Postgres
 
 ---
 
-## Milestone 6 — Auth UI in Chatbox
-**Goal:** Login page, register page, "Try Demo" button. JWT persisted across page refreshes.
-**Time estimate:** Day 5
-**Depends on:** Milestone 5
+## Milestones 1, 2, 4-11
 
-### Files to Create
-| File | Purpose |
-|---|---|
-| `src/renderer/routes/auth/login.tsx` | Login form + "Try Demo" button |
-| `src/renderer/routes/auth/register.tsx` | Register form |
-| `src/renderer/stores/authStore.ts` | Zustand: jwt, user, login(), logout(), loginDemo() |
+*(Milestones 1, 2, 4 through 11 are unchanged from the previous version — only the LLM references within them change from "OpenAI" / "LLM" to "Claude" / "Anthropic". The frontend code, postMessage protocol, iframe sandboxing, auth, demo apps, deployment, and all acceptance criteria remain the same. Key substitutions throughout:)*
 
-### Auth flow
-1. On app load: `authStore` checks `localStorage.getItem('chatbridge_jwt')` and validates via `/api/auth/refresh`
-2. If no valid token: redirect to `/auth/login`
-3. "Try Demo" → `POST /api/auth/demo` → store JWT → redirect to `/chat`
-4. JWT attached to every `fetch('/api/...')` and WebSocket connection: `ws://.../ws?token=${jwt}`
-
-### Acceptance Criteria
-- [ ] Fresh browser → redirected to login page
-- [ ] "Try Demo" click → lands in chat, no form required
-- [ ] Page refresh → still logged in (JWT revalidated)
-- [ ] Logout → redirected to login
+- `OPENAI_API_KEY` → `ANTHROPIC_API_KEY`
+- `openai` package → `@anthropic-ai/sdk`
+- `gpt-4o-mini` / `gpt-4o` → `claude-sonnet-4-6`
+- `openai.chat.completions.create()` → `anthropic.messages.stream()`
+- `finish_reason: "tool_calls"` → `stop_reason: "tool_use"`
+- `message.tool_calls` → `content[] blocks with type: "tool_use"`
+- Tool result format: `{ role: "tool" }` → `{ type: "tool_result", tool_use_id }` inside user message
 
 ---
 
-## Milestone 7 — Weather App
-**Goal:** Second demo app proving multi-app routing and stateless tool pattern.
-**Time estimate:** Day 5
-**Depends on:** Milestone 4 (chess proves the platform, weather reuses the pattern)
+## Deliverables Tracking
 
-### Files to Create
-| File | Purpose |
-|---|---|
-| `apps/weather/src/App.tsx` | Weather widget: shows current conditions and 5-day forecast |
-| `server/src/services/weather.ts` | Fetches from weather API using server-side `WEATHER_API_KEY` |
-| `server/src/routes/weather.ts` | Internal route used by tool execution, NOT exposed as REST |
+### AI Cost Analysis
+**Track from day 1.** Use the Anthropic console (console.anthropic.com) usage dashboard.
 
-### Weather tools
-```typescript
-const weatherTools = [
-  { name: 'get_current_weather', description: 'Get current weather for a location', parameters: { ... } },
-  { name: 'get_forecast', description: 'Get 5-day forecast', parameters: { ... } }
-]
-```
+**Claude Sonnet 4.6 pricing:** ~$3/M input tokens, ~$15/M output tokens.
 
-Weather tool execution happens entirely on the backend (API key never leaves server). The `tool_result` returned to the iframe is just display data.
-
-### Seed update
-Add weather app registration with `status: 'approved'` to `server/prisma/seed.ts`.
-
-### Acceptance Criteria
-- [ ] "What's the weather in Tokyo?" → `activate_app({ appName: 'weather' })` → iframe opens → `get_current_weather` called → weather widget renders
-- [ ] Chess and weather both active: "switch to weather" → weather tools in scope, chess still loaded
-- [ ] LLM routes correctly when both apps are active (scenario 6)
-
----
-
-## Milestone 8 — Spotify + OAuth
-**Goal:** Third demo app proving OAuth2 popup flow.
-**Time estimate:** Day 6-7
-**Depends on:** Milestone 5 (OAuthToken table in Postgres)
-
-### Files to Create
-| File | Purpose |
-|---|---|
-| `apps/spotify/src/App.tsx` | Playlist UI: shows search results and created playlists |
-| `server/src/routes/oauth.ts` | GET /api/oauth/spotify/authorize, GET /api/oauth/spotify/callback |
-| `server/src/services/spotify.ts` | Spotify API calls using stored tokens (search, create playlist, add tracks) |
-
-### OAuth flow (exact sequence)
-1. User asks "Create me a jazz playlist" → `activate_app({ appName: 'spotify' })`
-2. Spotify iframe opens, shows "Connect Spotify" button
-3. User clicks → parent `window.open('/api/oauth/spotify/authorize')`
-4. Backend redirects to `accounts.spotify.com/authorize?client_id=...&state=CSRF`
-5. User approves → Spotify redirects to `/api/oauth/spotify/callback?code=...&state=...`
-6. Backend: validates state, exchanges code for tokens, stores in `oauth_tokens` table
-7. Callback page: `window.opener.postMessage({ type: 'oauth_complete', provider: 'spotify' }, CLIENT_URL); window.close()`
-8. Parent receives `oauth_complete` → `chatBridgeStore.markAuthenticated('spotify')` → sends `{ type: 'auth_ready', provider: 'spotify' }` to iframe
-9. Iframe hides the "Connect Spotify" button
-10. LLM calls `create_playlist({ name: 'Jazz Vibes', genres: ['jazz'] })` → backend makes Spotify API call → returns playlist URL
-
-### OAuthToken schema
-```prisma
-model OAuthToken {
-  id           String    @id @default(uuid())
-  userId       String    @map("user_id")
-  provider     String
-  accessToken  String    @map("access_token")
-  refreshToken String?   @map("refresh_token")
-  expiresAt    DateTime? @map("expires_at")
-  user         User      @relation(fields: [userId], references: [id])
-
-  @@unique([userId, provider])
-}
-```
-
-### Acceptance Criteria
-- [ ] OAuth popup opens, user can complete Spotify auth
-- [ ] Token stored in Postgres, not sent to browser
-- [ ] `create_playlist` tool called → playlist created on Spotify → URL returned
-- [ ] Token auto-refreshed before each tool invocation
-
----
-
-## Milestone 9 — Error Handling + Circuit Breaker
-**Goal:** All failure modes handled gracefully. Chat never breaks.
-**Time estimate:** Day 7
-**Depends on:** All app milestones
-
-### Error states
-
-| Failure | Behavior | Where handled |
+| Scale | Monthly Cost | Assumptions |
 |---|---|---|
-| Tool timeout (10s) | Error result injected: `{ error: 'timeout', message: 'App did not respond' }`. LLM responds: "The app didn't respond. Try again?" | `chatBridgeStore.pendingToolCalls` timeout handler |
-| Iframe load failure (5s) | Panel shows: "[App name] failed to load" + Retry/Close buttons | `ChatBridgeFrame.tsx` onLoad timeout |
-| Tool execution error | Error result injected normally. LLM handles conversationally. | Normal tool_result path |
-| Circuit breaker: 3 consecutive failures | Panel closes. System message: "Chess is having issues and has been deactivated." Tools removed from active set. | `chatBridgeStore.recordFailure()` |
-| WebSocket disconnect | Reconnect with exponential backoff (1s, 2s, 4s, max 30s). Show reconnecting indicator. | `ws-client.ts` |
-| Backend error | `{ type: 'error', message: 'Generation failed. Please try again.' }` → shown as system message | `chatHandler.ts` catch block |
+| 100 users | ~$75 | 5 sessions/user/month, 10 tool invocations/session, ~2K input + 500 output tokens per invocation |
+| 1,000 users | ~$650 | Same pattern, prompt caching reduces input cost by ~20% |
+| 10,000 users | ~$5,500 | Aggressive context summarization saves ~30% |
+| 100,000 users | ~$45,000 | Prompt caching + tool result caching |
 
-### Circuit breaker implementation
-```typescript
-// In chatBridgeStore:
-recordFailure(sessionId, appId) {
-  const count = sessions[sessionId].failureCounts[appId] = (failureCounts[appId] ?? 0) + 1
-  if (count >= 3) {
-    this.deactivateApp(sessionId, appId)
-    // Trigger system message via callback
-  }
-  return count
-}
-```
+*Note: Claude Sonnet 4.6 is more expensive per-token than GPT-4o-mini but offers stronger tool use reliability, 200K context window, and native prompt caching. Using a single model eliminates model-routing logic and simplifies cost tracking.*
 
-### Acceptance Criteria
-- [ ] Test app with 11s delay → timeout error → LLM responds gracefully → chat continues
-- [ ] Chess iframe src set to invalid URL → 5s → error card in panel → retry button works
-- [ ] 3 consecutive tool failures → panel closes → system message → subsequent messages don't invoke chess tools
-- [ ] WebSocket disconnects → reconnects automatically → no message loss
+Write to `chatbridge/docs/COST_ANALYSIS.md` on day 7.
+
+### Demo Video (3-5 min)
+**Record on day 6.** Cover: architecture, chess demo, weather demo, Spotify OAuth, postMessage in console, generation.ts code walkthrough.
+
+### Social Post (Final Only)
+Post on LinkedIn or X Sunday evening. Tag @GauntletAI. Link to deployed app.
 
 ---
 
-## Milestone 10 — Tests
-**Goal:** Required test coverage for grading. Run in parallel with app development.
-**Time estimate:** Day 5-7 (parallel)
+## Stretch Goals
 
-### Backend tests
-```
-server/src/__tests__/
-  auth.test.ts           — register, login, refresh, demo, rate limiting
-  apps.test.ts           — register app, list approved, status update
-  conversations.test.ts  — CRUD, message persistence
-  ws.test.ts             — connection auth, user_message flow, tool call loop
-  middleware.test.ts     — JWT verification, attach req.user
-```
-
-### Frontend tests
-```
-src/renderer/packages/chatbridge/__tests__/
-  tool-bridge.test.ts    — ToolSchemaSchema → AI SDK ToolSet conversion
-  message-handler.test.ts — postMessage validation (source, type, Zod)
-  controller.test.ts     — activate/deactivate lifecycle, timeout, circuit breaker
-```
-
-### Key test: postMessage validation
-```typescript
-it('ignores messages from unknown source', () => {
-  const handler = createMessageHandler(iframeRef)
-  const fakeFrame = document.createElement('iframe')
-  handler({ source: fakeFrame.contentWindow, data: { type: 'tool_result', toolCallId: 'x', result: {} } })
-  expect(store.pendingToolCalls.get('x')).toBeUndefined()  // not resolved
-})
-```
-
-### Acceptance Criteria
-- [ ] `cd server && npm test` → all tests pass
-- [ ] Auth endpoint tests cover: happy path, duplicate email, wrong password, expired token, rate limit
-- [ ] WebSocket test covers: auth rejection, tool call loop, timeout
-- [ ] postMessage validation: accepts valid source, rejects unknown source, rejects unknown type
-
----
-
-## Milestone 11 — Deployment on Railway
-**Goal:** Single Railway service serving everything. Demo works at production URL.
-**Time estimate:** Day 7
-
-### Build script (`package.json` root scripts)
-```json
-{
-  "build:all": "pnpm build:web && npm run build --prefix apps/chess && npm run build --prefix apps/weather && npm run build --prefix apps/spotify && npm run build --prefix server",
-  "start": "cd server && npm start"
-}
-```
-
-### Express static serving (server/src/index.ts)
-```typescript
-// API routes first
-app.use('/api', apiRoutes)
-
-// Demo apps as static files (same origin, sandboxed by iframe sandbox attribute)
-app.use('/apps/chess', express.static(path.join(__dirname, '../../apps/chess/dist')))
-app.use('/apps/weather', express.static(path.join(__dirname, '../../apps/weather/dist')))
-app.use('/apps/spotify', express.static(path.join(__dirname, '../../apps/spotify/dist')))
-app.use('/apps/test-app', express.static(path.join(__dirname, '../../apps/test-app')))
-
-// Vite SPA — must be last, catch-all for client-side routing
-app.use(express.static(path.join(__dirname, '../../dist')))
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../../dist/index.html')))
-```
-
-### Railway environment variables
-```
-DATABASE_URL=postgresql://...  (Railway Postgres addon — auto-set)
-OPENAI_API_KEY=sk-...
-JWT_SECRET=<random 32+ char string>
-WEATHER_API_KEY=...
-SPOTIFY_CLIENT_ID=...
-SPOTIFY_CLIENT_SECRET=...
-PORT=3000  (Railway sets this automatically)
-```
-
-### App URLs in seed data
-Since all apps are same-origin, registered URLs are relative paths:
-```typescript
-// server/prisma/seed.ts
-const chessApp = await prisma.appRegistration.upsert({
-  where: { id: 'chess-demo' },
-  create: {
-    id: 'chess-demo',
-    name: 'Chess',
-    url: '/apps/chess',   // relative — resolves to same origin in production
-    description: 'Interactive chess game with AI analysis',
-    toolSchemas: chessTools,
-    status: 'approved'
-  }
-})
-```
-
-For local dev, urls remain `/apps/chess` (served by Express on localhost:3000).
-
-### Acceptance Criteria
-- [ ] `railway up` deploys without errors
-- [ ] `https://{service}.railway.app` loads the Chatbox UI
-- [ ] "Try Demo" → works → chess game playable
-- [ ] WebSocket connects: `wss://{service}.railway.app/ws`
-- [ ] Prisma migrations run on deploy: add to Railway start command `npx prisma migrate deploy && node dist/index.js`
-
----
-
-## File Manifest (New Files)
-
-### Backend (`server/`)
-```
-server/
-├── package.json
-├── tsconfig.json
-├── .env.example
-├── prisma/
-│   ├── schema.prisma
-│   └── seed.ts
-└── src/
-    ├── index.ts                    # Express bootstrap, static serving, WS server
-    ├── lib/
-    │   └── prisma.ts               # Prisma client singleton
-    ├── middleware/
-    │   ├── auth.ts                 # JWT verification middleware
-    │   └── rateLimit.ts            # express-rate-limit configs
-    ├── routes/
-    │   ├── auth.ts                 # register, login, refresh, demo
-    │   ├── apps.ts                 # app registry CRUD
-    │   ├── conversations.ts        # conversation CRUD
-    │   └── oauth.ts                # Spotify OAuth flow
-    ├── services/
-    │   ├── spotify.ts              # Spotify API calls (server-side)
-    │   └── weather.ts              # Weather API calls (server-side)
-    ├── ws/
-    │   └── chatHandler.ts          # WebSocket handler: stream, tool call loop
-    └── __tests__/
-        ├── auth.test.ts
-        ├── apps.test.ts
-        ├── conversations.test.ts
-        ├── ws.test.ts
-        └── middleware.test.ts
-```
-
-### Frontend additions (`src/`)
-```
-src/
-├── shared/types/
-│   └── chatbridge.ts               # Zod schemas: PluginManifest, BridgeMessage, etc.
-└── renderer/
-    ├── stores/
-    │   ├── chatBridgeStore.ts       # Plugin registry, session state, pending tool calls
-    │   └── authStore.ts            # JWT, user, login/logout
-    ├── components/
-    │   └── ChatBridgeFrame.tsx      # Side panel iframe + postMessage wiring
-    ├── packages/
-    │   └── chatbridge/
-    │       ├── controller.ts        # Plugin lifecycle: activate, deactivate
-    │       ├── ws-client.ts         # WebSocket client with reconnect
-    │       ├── message-handler.ts   # Validate + dispatch incoming postMessage
-    │       └── __tests__/
-    │           ├── tool-bridge.test.ts
-    │           ├── message-handler.test.ts
-    │           └── controller.test.ts
-    └── routes/
-        └── auth/
-            ├── login.tsx
-            └── register.tsx
-```
-
-### Demo Apps
-```
-apps/
-├── test-app/
-│   └── index.html                  # 30-line protocol compliance fixture
-├── chess/
-│   ├── package.json                # React + Vite, react-chessboard, chess.js
-│   ├── vite.config.ts
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx                 # Board + postMessage protocol
-│       └── hooks/
-│           └── useChessProtocol.ts
-├── weather/
-│   ├── package.json                # React + Vite
-│   └── src/
-│       ├── main.tsx
-│       └── App.tsx                 # Weather widget + postMessage protocol
-└── spotify/
-    ├── package.json                # React + Vite
-    └── src/
-        ├── main.tsx
-        └── App.tsx                 # Playlist UI + OAuth connect button
-```
-
-### Modified Files (Chatbox core)
-```
-src/renderer/packages/model-calls/stream-text.ts   # Inject activate_app tool at line ~296
-src/renderer/stores/session/generation.ts           # Conditional branch at line ~110
-```
+| Goal | Description | Milestone |
+|---|---|---|
+| Prompt caching | Enable Anthropic prompt caching for system prompt + tool schemas. ~90% cost reduction on cache hits. | M3 |
+| `restore` signal | Send `{ type: 'restore', lastState }` to iframe on session reload. | M9 |
+| Inline chat cards | Compact `[Chess — in progress]` cards in message thread. | M4 |
+| Extended thinking | Use Claude's extended thinking for complex chess analysis. | M4 |
 
 ---
 
 ## Dependencies Between Milestones
 
 ```
-M0 (backend scaffold)
+M0 (backend scaffold) ──────────────────────────────────────────> M11 (deploy day 1)
   └─> M1 (frontend wiring + activate_app)
         └─> M2 (test-app + iframe + postMessage)
               └─> M3 (backend tool call loop)
-                    └─> M4 (chess app)          ─> M7 (weather) ─> M9 (error handling)
-                    └─> M5 (real auth)
-                          └─> M6 (auth UI)
-                          └─> M8 (spotify OAuth)
+                    ├─> M4 (chess) ──────> M7 (weather) ──> M9 (error handling)
+                    ├─> M5 (auth) ──────> M6 (auth UI) ──> M8 (spotify OAuth)
                     └─> M10 (tests, parallel)
-                    └─> M11 (deployment, last)
-```
 
-M9 (error handling) and M10 (tests) can be developed in parallel with M7/M8 once M4 is complete.
+Note: M0-M4 use hardcoded JWT. M5 replaces with real auth.
+```
 
 ---
 
@@ -909,9 +443,12 @@ M9 (error handling) and M10 (tests) can be developed in parallel with M7/M8 once
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
+| Anthropic streaming tool_use block accumulation | Medium | Use SDK `stream.on('contentBlock')` helper — handles accumulation. Test early in M3 |
+| Anthropic tool_result format mismatch | Medium | Claude requires `tool_result` blocks with exact `tool_use_id` reference inside a `user` role message. Validate format in M3 test app |
 | react-chessboard sandbox compatibility | Low | allow-scripts supports React; test early in M4 |
-| Spotify OAuth popup blocked | Medium | Test on deployed URL (not localhost); popups blocked on localhost sometimes |
-| OpenAI tool_call accumulation across streaming chunks | Medium | Use existing AI SDK accumulation utilities or test with a simple accumulator early in M3 |
-| Railway Postgres migration on deploy | Low | `prisma migrate deploy` in start command; test before final deadline |
-| Multiple active apps causing tool name collisions | Low | Backend namespaces tools as `{appId}_{toolName}` in OpenAI function list |
-| Chess iframe renders but can't access react-chessboard | Low | react-chessboard is pure JS, no DOM access to parent needed; test with simple div first |
+| Spotify OAuth popup blocked | Medium | Test on deployed URL, not localhost |
+| Railway Postgres migration on deploy | Low | `prisma migrate deploy` in start command |
+| Tool name collisions across apps | Low | Namespace as `{appId}_{toolName}` |
+| Fall behind by day 3 | Medium | See fallback plan — cut Spotify |
+| Weather iframe fetch blocked by sandbox | Low | `allow-scripts` permits fetch; test in M7 |
+| Anthropic rate limits during development | Low | Sonnet tier has generous limits; monitor via console |
