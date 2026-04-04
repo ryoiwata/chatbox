@@ -96,7 +96,7 @@ export async function getSpotifyToken(userId: string): Promise<string | null> {
   return stored.accessToken
 }
 
-async function spotifyFetch<T>(accessToken: string, path: string, options?: RequestInit): Promise<T> {
+async function spotifyFetch<T>(userId: string, accessToken: string, path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${SPOTIFY_API_BASE}${path}`, {
     ...options,
     headers: {
@@ -114,6 +114,11 @@ async function spotifyFetch<T>(accessToken: string, path: string, options?: Requ
     }
     if (res.status === 403) {
       console.error(`[Spotify] Permission denied on ${path}: ${body}`)
+      // Clear the stored token so user re-authenticates with correct scopes
+      await prisma.oAuthToken.deleteMany({
+        where: { userId, provider: 'spotify' },
+      })
+      console.error(`[Spotify] Cleared stored token for user ${userId} — re-auth required with correct scopes`)
       throw new Error('permission_denied')
     }
     throw new Error(`Spotify API ${res.status}: ${body}`)
@@ -131,7 +136,7 @@ export async function searchTracks(
   if (!accessToken) throw new Error('auth_required')
 
   const params = new URLSearchParams({ q: query, type: 'track', limit: String(Math.min(limit, 20)) })
-  const data = await spotifyFetch<SpotifySearchResponse>(accessToken, `/search?${params}`)
+  const data = await spotifyFetch<SpotifySearchResponse>(userId, accessToken, `/search?${params}`)
 
   return data.tracks.items.map((item) => ({
     id: item.id,
@@ -152,9 +157,10 @@ export async function createPlaylist(
   const accessToken = await getSpotifyToken(userId)
   if (!accessToken) throw new Error('auth_required')
 
-  const me = await spotifyFetch<{ id: string }>(accessToken, '/me')
+  const me = await spotifyFetch<{ id: string }>(userId, accessToken, '/me')
 
   const playlist = await spotifyFetch<SpotifyCreatePlaylistResponse>(
+    userId,
     accessToken,
     `/users/${me.id}/playlists`,
     {
@@ -176,7 +182,7 @@ export async function addTracksToPlaylist(
 
   // Spotify API max 100 tracks per request
   for (let i = 0; i < trackUris.length; i += 100) {
-    await spotifyFetch(accessToken, `/playlists/${playlistId}/tracks`, {
+    await spotifyFetch(userId, accessToken, `/playlists/${playlistId}/tracks`, {
       method: 'POST',
       body: JSON.stringify({ uris: trackUris.slice(i, i + 100) }),
     })

@@ -63,6 +63,7 @@ router.get('/spotify/authorize', (req, res) => {
     redirect_uri: SPOTIFY_REDIRECT_URI,
     scope: 'playlist-modify-public playlist-modify-private user-read-private',
     state,
+    show_dialog: 'true',
   })
 
   res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`)

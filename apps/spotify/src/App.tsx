@@ -286,8 +286,9 @@ export default function App() {
           return
         }
         if (body.error === 'permission_denied') {
+          setConnectionStatus('disconnected')
           window.parent.postMessage(
-            { type: 'tool_result', toolCallId, result: { error: body.message ?? 'Spotify permission denied. Check your Spotify Developer Dashboard app settings.' } },
+            { type: 'tool_result', toolCallId, result: { error: 'Spotify permissions insufficient. Please click "Connect Spotify" to re-authorize with playlist creation permissions.' } },
             '*'
           )
           return
