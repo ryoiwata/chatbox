@@ -100,7 +100,7 @@ export default defineConfig(({ mode }) => {
                 title: 'Main Process Dependency Analysis',
               }),
             ]
-          : [externalizeDepsPlugin()]),
+          : [externalizeDepsPlugin({ include: ["source-map-support"] })]),
         process.env.SENTRY_AUTH_TOKEN
           ? sentryVitePlugin({
               authToken: process.env.SENTRY_AUTH_TOKEN,
