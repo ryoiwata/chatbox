@@ -90,7 +90,7 @@ export default defineConfig(({ mode }) => {
   return {
     main: {
       plugins: [
-        ...(isProduction && !isWeb
+        ...(isProduction
           ? [
               visualizer({
                 filename: 'release/app/dist/main/stats.html',
@@ -124,15 +124,7 @@ export default defineConfig(({ mode }) => {
         sourcemap: isProduction ? 'hidden' : true,
         minify: isProduction,
         rollupOptions: {
-          // In web/Docker builds, externalize ALL node_modules since Electron
-          // native deps aren't installed (--ignore-scripts). Only the renderer
-          // output matters for web — main/preload are unused.
-          external: isWeb
-            ? (id: string) => {
-                if (id.startsWith('.') || id.startsWith('/') || id.startsWith('src/')) return false
-                return true
-              }
-            : Object.keys(packageJson.dependencies || {}),
+          external: Object.keys(packageJson.dependencies || {}),
           output: {
             entryFileNames: '[name].js',
             inlineDynamicImports: true,

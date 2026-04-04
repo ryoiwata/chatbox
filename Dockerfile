@@ -23,10 +23,11 @@ RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --ignore-scr
 # Copy all source
 COPY . .
 
-# Build web frontend — electron-vite builds main+preload+renderer.
-# CHATBOX_BUILD_PLATFORM=web tells the config to externalize Electron deps
-# (they're unavailable in Docker since we use --ignore-scripts).
-RUN npx cross-env CHATBOX_BUILD_PLATFORM=web npx electron-vite build
+# Build web frontend — use vite directly with renderer-only config.
+# electron-vite builds main+preload+renderer but main/preload fail in Docker
+# because Electron native deps aren't installed (--ignore-scripts).
+# We only need the renderer for the web deployment.
+RUN npx vite build --config vite.web.config.ts
 
 # Build third-party demo apps
 RUN cd apps/chess && npm install && npm run build
