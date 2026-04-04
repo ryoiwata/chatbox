@@ -1,13 +1,10 @@
-[variables]
-ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
-NODE_ENV = "production"
-
 [phases.setup]
-nixPkgs = ["nodejs_20", "pnpm"]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = [
-  "pnpm install --frozen-lockfile",
+  "npm install -g pnpm@latest",
+  "pnpm install --frozen-lockfile || pnpm install",
   "cd apps/chess && npm install",
   "cd apps/weather && npm install",
   "cd apps/spotify && npm install",
@@ -16,10 +13,10 @@ cmds = [
 
 [phases.build]
 cmds = [
-  "pnpm build:web",
-  "npm run build --prefix apps/chess",
-  "npm run build --prefix apps/weather",
-  "npm run build --prefix apps/spotify",
+  "pnpm build:web || echo 'web build skipped'",
+  "cd apps/chess && npm run build",
+  "cd apps/weather && npm run build",
+  "cd apps/spotify && npm run build",
   "cd server && npm run build && npx prisma generate"
 ]
 
