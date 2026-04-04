@@ -84,22 +84,44 @@ router.post('/create-playlist', async (req: AuthRequest, res) => {
   try {
     const playlist = await createPlaylist(userId, name, description ?? '')
 
-    // Search each query (best match, 1 result) — failures silently skipped
-    const trackResults = await Promise.all(
-      trackQueries.map((q) => searchTracks(userId, q, 1).catch(() => []))
-    )
+    // Search sequentially with small delays to avoid Spotify dev mode rate limits
+    const foundTracks: Awaited<ReturnType<typeof searchTracks>> = []
+    for (const q of trackQueries) {
+      try {
+        const results = await searchTracks(userId, q, 1)
+        if (results[0]) foundTracks.push(results[0])
+      } catch {
+        console.warn('[Spotify] Search failed for query: ' + q)
+      }
+      // Small delay between searches to respect dev mode rate limits
+      if (trackQueries.length > 3) {
+        await new Promise((r) => setTimeout(r, 200))
+      }
+    }
 
-    const foundTracks = trackResults.map((r) => r[0]).filter((t): t is NonNullable<typeof t> => Boolean(t))
     const trackUris = foundTracks.map((t) => t.uri)
+    let tracksAdded = 0
+    let addTracksWarning: string | undefined
 
     if (trackUris.length > 0) {
-      await addTracksToPlaylist(userId, playlist.id, trackUris)
+      // Brief delay after playlist creation for Spotify propagation
+      await new Promise((r) => setTimeout(r, 1000))
+      try {
+        await addTracksToPlaylist(userId, playlist.id, trackUris, playlist.accessToken)
+        tracksAdded = trackUris.length
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'unknown'
+        console.error('[Spotify] addTracksToPlaylist failed (' + msg + '), returning partial success')
+        addTracksWarning = 'Playlist created but adding tracks failed (' + msg + '). Try adding tracks manually in Spotify.'
+      }
     }
 
     res.json({
       playlist: { id: playlist.id, url: playlist.url, name },
-      tracksAdded: trackUris.length,
+      tracksAdded,
+      tracksFound: foundTracks.length,
       tracks: foundTracks,
+      ...(addTracksWarning ? { warning: addTracksWarning } : {}),
     })
   } catch (err) {
     if (err instanceof Error && err.message === 'auth_required') {

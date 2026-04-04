@@ -148,7 +148,7 @@ export async function createPlaylist(
   userId: string,
   name: string,
   description = ''
-): Promise<{ id: string; url: string }> {
+): Promise<{ id: string; url: string; accessToken: string }> {
   const accessToken = await getSpotifyToken(userId)
   if (!accessToken) throw new Error('auth_required')
 
@@ -162,22 +162,38 @@ export async function createPlaylist(
     }
   )
 
-  return { id: playlist.id, url: playlist.external_urls.spotify }
+  return { id: playlist.id, url: playlist.external_urls.spotify, accessToken }
 }
 
 export async function addTracksToPlaylist(
   userId: string,
   playlistId: string,
-  trackUris: string[]
+  trackUris: string[],
+  accessTokenOverride?: string
 ): Promise<void> {
-  const accessToken = await getSpotifyToken(userId)
+  const accessToken = accessTokenOverride ?? await getSpotifyToken(userId)
   if (!accessToken) throw new Error('auth_required')
 
   // Spotify API max 100 tracks per request
   for (let i = 0; i < trackUris.length; i += 100) {
-    await spotifyFetch(accessToken, `/playlists/${playlistId}/tracks`, {
-      method: 'POST',
-      body: JSON.stringify({ uris: trackUris.slice(i, i + 100) }),
-    })
+    const batch = trackUris.slice(i, i + 100)
+    try {
+      await spotifyFetch(accessToken, `/playlists/${playlistId}/tracks`, {
+        method: 'POST',
+        body: JSON.stringify({ uris: batch }),
+      })
+    } catch (err) {
+      if (err instanceof Error && err.message === 'permission_denied') {
+        // Retry once after a delay — Spotify dev mode may need propagation time
+        console.log(`[Spotify] Retrying addTracksToPlaylist after 403 (delay 1.5s)`)
+        await new Promise((r) => setTimeout(r, 1500))
+        await spotifyFetch(accessToken, `/playlists/${playlistId}/tracks`, {
+          method: 'POST',
+          body: JSON.stringify({ uris: batch }),
+        })
+      } else {
+        throw err
+      }
+    }
   }
 }
