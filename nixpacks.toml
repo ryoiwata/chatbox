@@ -4,7 +4,10 @@ NODE_ENV = "production"
 
 [phases.setup]
 nixPkgs = ["nodejs_20"]
-cmds = ["corepack enable"]
+cmds = [
+  "npm config set prefix /usr/local",
+  "npm install -g pnpm@10.33.0"
+]
 
 [phases.install]
 cmds = [
