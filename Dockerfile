@@ -1,3 +1,4 @@
+# Build: ChatBridge server + frontend
 FROM node:20-slim
 
 WORKDIR /app
