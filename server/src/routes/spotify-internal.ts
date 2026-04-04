@@ -61,6 +61,10 @@ router.post('/search', async (req: AuthRequest, res) => {
       res.status(401).json({ error: 'auth_required', provider: 'spotify' })
       return
     }
+    if (err instanceof Error && err.message === 'permission_denied') {
+      res.status(403).json({ error: 'permission_denied', message: 'Spotify permission denied. Ensure your app has the required scopes and the user is added as a tester in the Spotify Developer Dashboard.' })
+      return
+    }
     console.error('[Spotify] Search error', err)
     res.status(500).json({ error: 'Failed to search tracks' })
   }
@@ -100,6 +104,10 @@ router.post('/create-playlist', async (req: AuthRequest, res) => {
   } catch (err) {
     if (err instanceof Error && err.message === 'auth_required') {
       res.status(401).json({ error: 'auth_required', provider: 'spotify' })
+      return
+    }
+    if (err instanceof Error && err.message === 'permission_denied') {
+      res.status(403).json({ error: 'permission_denied', message: 'Spotify returned 403 Forbidden. Check that your Spotify app has playlist-modify-public/private scopes and the account is added as a tester in the Spotify Developer Dashboard.' })
       return
     }
     console.error('[Spotify] Create playlist error', err)

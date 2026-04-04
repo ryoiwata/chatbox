@@ -276,11 +276,18 @@ export default function App() {
       })
 
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
         if (body.error === 'auth_required') {
           setConnectionStatus('disconnected')
           window.parent.postMessage(
             { type: 'tool_result', toolCallId, result: { error: 'Spotify authentication expired. Please reconnect.' } },
+            '*'
+          )
+          return
+        }
+        if (body.error === 'permission_denied') {
+          window.parent.postMessage(
+            { type: 'tool_result', toolCallId, result: { error: body.message ?? 'Spotify permission denied. Check your Spotify Developer Dashboard app settings.' } },
             '*'
           )
           return

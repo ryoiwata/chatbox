@@ -108,6 +108,14 @@ async function spotifyFetch<T>(accessToken: string, path: string, options?: Requ
 
   if (!res.ok) {
     const body = await res.text()
+    if (res.status === 401) {
+      console.error(`[Spotify] Token expired/invalid on ${path}: ${body}`)
+      throw new Error('auth_required')
+    }
+    if (res.status === 403) {
+      console.error(`[Spotify] Permission denied on ${path}: ${body}`)
+      throw new Error('permission_denied')
+    }
     throw new Error(`Spotify API ${res.status}: ${body}`)
   }
 
