@@ -286,9 +286,8 @@ export default function App() {
           return
         }
         if (body.error === 'permission_denied') {
-          setConnectionStatus('disconnected')
           window.parent.postMessage(
-            { type: 'tool_result', toolCallId, result: { error: 'Spotify permissions insufficient. Please click "Connect Spotify" to re-authorize with playlist creation permissions.' } },
+            { type: 'tool_result', toolCallId, result: { error: 'Spotify returned 403 Forbidden. The user may need to be added as a tester in the Spotify Developer Dashboard for this app to create playlists.' } },
             '*'
           )
           return

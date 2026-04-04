@@ -131,7 +131,10 @@ router.get('/spotify/callback', async (req, res) => {
       access_token: string
       refresh_token?: string
       expires_in: number
+      scope?: string
     }
+
+    console.log(`[OAuth] Spotify token exchange success — scopes: ${tokens.scope ?? 'not returned'}, expires_in: ${tokens.expires_in}`)
 
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000)
 
