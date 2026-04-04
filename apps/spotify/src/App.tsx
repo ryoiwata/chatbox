@@ -257,9 +257,15 @@ export default function App() {
   ): Promise<void> {
     const name = params.name as string
     const description = (params.description as string | undefined) ?? ''
-    const trackQueries = params.trackQueries as string[]
+    // LLMs sometimes send a comma-separated string instead of an array
+    const rawQueries = params.trackQueries
+    const trackQueries: string[] = typeof rawQueries === 'string'
+      ? rawQueries.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+      : Array.isArray(rawQueries)
+        ? rawQueries as string[]
+        : []
 
-    if (!name || !trackQueries?.length) {
+    if (!name || !trackQueries.length) {
       window.parent.postMessage(
         { type: 'tool_result', toolCallId, result: { error: 'name and trackQueries are required' } },
         '*'

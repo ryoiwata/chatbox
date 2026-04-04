@@ -15,7 +15,13 @@ const CreatePlaylistSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   trackQueries: z.preprocess(
-    (val) => (typeof val === 'string' ? [val] : val),
+    (val) => {
+      if (typeof val === 'string') {
+        // LLMs often send a comma-separated string instead of an array
+        return val.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+      }
+      return val
+    },
     z.array(z.string().min(1)).min(1)
   ),
 })
