@@ -17,8 +17,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY release/app/package.json release/app/
 COPY patches/ patches/
 
-# Install root/frontend dependencies
-RUN pnpm install --frozen-lockfile || pnpm install
+# Install root/frontend dependencies (skip postinstall — Electron native modules not needed for web build)
+RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --ignore-scripts
 
 # Copy all source
 COPY . .
