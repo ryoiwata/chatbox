@@ -3,7 +3,7 @@ nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = [
-  "corepack enable && corepack prepare pnpm@latest --activate && pnpm install --frozen-lockfile || pnpm install",
+  "npm install -g pnpm@10.33.0 && pnpm install --frozen-lockfile || pnpm install",
   "cd apps/chess && npm install",
   "cd apps/weather && npm install",
   "cd apps/spotify && npm install",
