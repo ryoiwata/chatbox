@@ -14,7 +14,10 @@ const SearchSchema = z.object({
 const CreatePlaylistSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  trackQueries: z.array(z.string().min(1)).min(1),
+  trackQueries: z.preprocess(
+    (val) => (typeof val === 'string' ? [val] : val),
+    z.array(z.string().min(1)).min(1)
+  ),
 })
 
 // GET /api/internal/spotify/status

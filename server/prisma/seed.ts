@@ -170,7 +170,7 @@ async function main(): Promise<void> {
               trackQueries: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Search queries for tracks to add',
+                description: 'Array of search queries, one per track (e.g. ["Take Five Dave Brubeck", "Fly Me To The Moon Frank Sinatra"]). Must be an array, not a comma-separated string.',
               },
             },
             required: ['name', 'trackQueries'],
