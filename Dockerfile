@@ -39,4 +39,4 @@ RUN cd server && npm install && npm run build && npx prisma generate
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "cd /app/server && npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "cd /app/server && npx prisma migrate deploy && npx ts-node prisma/seed.ts && node dist/index.js"]
