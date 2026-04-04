@@ -169,8 +169,8 @@ router.post('/debug-add-track', async (req: AuthRequest, res) => {
   })
   const plBody = await plRes.text()
 
-  // Step 3: Try adding track
-  const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+  // Step 3: Try adding track via /items (new Feb 2026 endpoint)
+  const addItemsRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/items`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -178,14 +178,24 @@ router.post('/debug-add-track', async (req: AuthRequest, res) => {
     },
     body: JSON.stringify({ uris: [trackUri] }),
   })
-  const addBody = await addRes.text()
-  const addHeaders: Record<string, string> = {}
-  addRes.headers.forEach((v, k) => { addHeaders[k] = v })
+  const addItemsBody = await addItemsRes.text()
+
+  // Step 4: Try adding track via /tracks (old endpoint) for comparison
+  const addTracksRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uris: [trackUri] }),
+  })
+  const addTracksBody = await addTracksRes.text()
 
   res.json({
     me: { status: meRes.status, body: JSON.parse(meBody) },
     playlist: { status: plRes.status, body: JSON.parse(plBody) },
-    addTrack: { status: addRes.status, headers: addHeaders, body: addBody },
+    addViaItems: { status: addItemsRes.status, body: addItemsBody },
+    addViaTracks: { status: addTracksRes.status, body: addTracksBody },
   })
 })
 
