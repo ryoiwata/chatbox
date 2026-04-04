@@ -1,0 +1,23 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = [
+  "npm install -g pnpm@latest && export PATH=$(npm root -g)/../bin:$PATH && pnpm install --frozen-lockfile || pnpm install",
+  "cd apps/chess && npm install",
+  "cd apps/weather && npm install",
+  "cd apps/spotify && npm install",
+  "cd server && npm install"
+]
+
+[phases.build]
+cmds = [
+  "export PATH=$(npm root -g)/../bin:$PATH && pnpm build:web || echo 'web build skipped'",
+  "cd apps/chess && npm run build",
+  "cd apps/weather && npm run build",
+  "cd apps/spotify && npm run build",
+  "cd server && npm run build && npx prisma generate"
+]
+
+[start]
+cmd = "cd server && npx prisma migrate deploy && node dist/index.js"
