@@ -140,4 +140,53 @@ router.post('/create-playlist', async (req: AuthRequest, res) => {
   }
 })
 
+// POST /api/internal/spotify/debug-add-track — diagnostic endpoint
+router.post('/debug-add-track', async (req: AuthRequest, res) => {
+  const userId = req.user!.userId
+  const { playlistId, trackUri } = req.body as { playlistId: string; trackUri: string }
+
+  if (!playlistId || !trackUri) {
+    res.status(400).json({ error: 'playlistId and trackUri required' })
+    return
+  }
+
+  const { getSpotifyToken } = await import('../services/spotify')
+  const accessToken = await getSpotifyToken(userId)
+  if (!accessToken) {
+    res.json({ error: 'no token' })
+    return
+  }
+
+  // Step 1: GET /me to verify token works
+  const meRes = await fetch('https://api.spotify.com/v1/me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  const meBody = await meRes.text()
+
+  // Step 2: GET /playlists/{id} to verify playlist ownership
+  const plRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  const plBody = await plRes.text()
+
+  // Step 3: Try adding track
+  const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uris: [trackUri] }),
+  })
+  const addBody = await addRes.text()
+  const addHeaders: Record<string, string> = {}
+  addRes.headers.forEach((v, k) => { addHeaders[k] = v })
+
+  res.json({
+    me: { status: meRes.status, body: JSON.parse(meBody) },
+    playlist: { status: plRes.status, body: JSON.parse(plBody) },
+    addTrack: { status: addRes.status, headers: addHeaders, body: addBody },
+  })
+})
+
 export default router
