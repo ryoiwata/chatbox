@@ -4,10 +4,11 @@ NODE_ENV = "production"
 
 [phases.setup]
 nixPkgs = ["nodejs_20"]
+cmds = ["corepack enable"]
 
 [phases.install]
 cmds = [
-  "corepack enable && pnpm install --frozen-lockfile",
+  "pnpm install --frozen-lockfile",
   "cd apps/chess && npm install",
   "cd apps/weather && npm install",
   "cd apps/spotify && npm install",
