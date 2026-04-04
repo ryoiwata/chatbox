@@ -90,17 +90,21 @@ router.post('/create-playlist', async (req: AuthRequest, res) => {
   try {
     const playlist = await createPlaylist(userId, name, description ?? '')
 
-    // Search sequentially with small delays to avoid Spotify dev mode rate limits
+    // Search for tracks concurrently in small batches to stay fast but avoid rate limits
     const foundTracks: Awaited<ReturnType<typeof searchTracks>> = []
-    for (const q of trackQueries) {
-      try {
-        const results = await searchTracks(userId, q, 1)
-        if (results[0]) foundTracks.push(results[0])
-      } catch {
-        console.warn('[Spotify] Search failed for query: ' + q)
+    const BATCH_SIZE = 5
+    for (let i = 0; i < trackQueries.length; i += BATCH_SIZE) {
+      const batch = trackQueries.slice(i, i + BATCH_SIZE)
+      const results = await Promise.allSettled(
+        batch.map((q) => searchTracks(userId, q, 1))
+      )
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value[0]) {
+          foundTracks.push(r.value[0])
+        }
       }
-      // Small delay between searches to respect dev mode rate limits
-      if (trackQueries.length > 3) {
+      // Small delay between batches if more to come
+      if (i + BATCH_SIZE < trackQueries.length) {
         await new Promise((r) => setTimeout(r, 200))
       }
     }
@@ -111,7 +115,7 @@ router.post('/create-playlist', async (req: AuthRequest, res) => {
 
     if (trackUris.length > 0) {
       // Brief delay after playlist creation for Spotify propagation
-      await new Promise((r) => setTimeout(r, 2000))
+      await new Promise((r) => setTimeout(r, 500))
       try {
         const result = await addTracksToPlaylist(userId, playlist.id, trackUris)
         tracksAdded = result.added

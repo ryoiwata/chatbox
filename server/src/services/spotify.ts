@@ -178,96 +178,51 @@ export async function addTracksToPlaylist(
 ): Promise<{ added: number; failed: number }> {
   if (trackUris.length === 0) return { added: 0, failed: 0 }
 
-  // Always get a fresh token from DB (not a stale override)
-  let accessToken = await getSpotifyToken(userId)
+  const accessToken = await getSpotifyToken(userId)
   if (!accessToken) throw new Error('auth_required')
 
-  let added = 0
-  let failed = 0
-  let refreshedOnce = false
+  // Spotify migrated /tracks → /items in Feb 2026
+  const itemsPath = '/playlists/' + playlistId + '/items'
+  const tracksPath = '/playlists/' + playlistId + '/tracks'
 
-  // Spotify migrated /tracks → /items in Feb 2026. Try /items first, fall back to /tracks.
-  const addPath = '/playlists/' + playlistId + '/items'
-  const fallbackPath = '/playlists/' + playlistId + '/tracks'
-
-  // Add tracks one at a time to isolate failures and handle rate limits
-  let useFallback = false
-  for (const uri of trackUris) {
-    const path = useFallback ? fallbackPath : addPath
+  // Batch add all tracks in one request (Spotify supports up to 100 per request)
+  for (let i = 0; i < trackUris.length; i += 100) {
+    const batch = trackUris.slice(i, i + 100)
     try {
-      await spotifyFetch(accessToken, path, {
+      await spotifyFetch(accessToken, itemsPath, {
         method: 'POST',
-        body: JSON.stringify({ uris: [uri] }),
+        body: JSON.stringify({ uris: batch }),
       })
-      added++
-      console.log(`[Spotify] Added track ${added}/${trackUris.length}: ${uri}`)
+      console.log(`[Spotify] Added batch of ${batch.length} tracks to playlist ${playlistId}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown'
-
-      // On 403 with /items, try /tracks fallback (older API)
-      if (msg === 'permission_denied' && !useFallback) {
-        console.log('[Spotify] 403 on /items endpoint, trying /tracks fallback')
-        useFallback = true
+      if (msg === 'permission_denied') {
+        // Fallback to old /tracks endpoint
+        console.log('[Spotify] /items returned 403, trying /tracks fallback')
         try {
-          await spotifyFetch(accessToken, fallbackPath, {
+          await spotifyFetch(accessToken, tracksPath, {
             method: 'POST',
-            body: JSON.stringify({ uris: [uri] }),
+            body: JSON.stringify({ uris: batch }),
           })
-          added++
-          console.log(`[Spotify] Added track via /tracks fallback ${added}/${trackUris.length}: ${uri}`)
-          await new Promise((r) => setTimeout(r, 300))
+          console.log(`[Spotify] Added batch via /tracks fallback`)
           continue
         } catch (fbErr) {
-          const fbMsg = fbErr instanceof Error ? fbErr.message : 'unknown'
-          // Both paths failed — try refreshing the token once
-          if (fbMsg === 'permission_denied' && !refreshedOnce) {
-            refreshedOnce = true
-            console.log('[Spotify] Both paths failed with 403 — refreshing token')
-            const freshToken = await refreshToken(userId)
-            if (freshToken) {
-              accessToken = freshToken
-              useFallback = false // reset to try /items again with fresh token
-              try {
-                await spotifyFetch(accessToken, addPath, {
-                  method: 'POST',
-                  body: JSON.stringify({ uris: [uri] }),
-                })
-                added++
-                console.log(`[Spotify] Added track after token refresh ${added}/${trackUris.length}: ${uri}`)
-                await new Promise((r) => setTimeout(r, 300))
-                continue
-              } catch {
-                // Final fallback: give up on this track
-              }
-            }
-          }
-          failed++
-          console.error(`[Spotify] Failed to add track ${uri}: ${fbMsg}`)
+          console.error('[Spotify] Both /items and /tracks failed:', fbErr instanceof Error ? fbErr.message : fbErr)
+          return { added: i, failed: trackUris.length - i }
         }
-      } else if (msg.startsWith('rate_limited:')) {
-        const waitSec = parseInt(msg.split(':')[1] ?? '5', 10)
-        console.log(`[Spotify] Rate limited, waiting ${waitSec}s`)
-        await new Promise((r) => setTimeout(r, waitSec * 1000))
-        try {
-          await spotifyFetch(accessToken, path, {
-            method: 'POST',
-            body: JSON.stringify({ uris: [uri] }),
-          })
-          added++
-        } catch {
-          failed++
-          console.error(`[Spotify] Failed to add track after rate limit wait: ${uri}`)
-        }
-      } else {
-        failed++
-        console.error(`[Spotify] Failed to add track ${uri}: ${msg}`)
       }
+      if (msg.startsWith('rate_limited:')) {
+        const waitSec = parseInt(msg.split(':')[1] ?? '5', 10)
+        console.log(`[Spotify] Rate limited, waiting ${waitSec}s before retry`)
+        await new Promise((r) => setTimeout(r, waitSec * 1000))
+        i -= 100 // retry this batch
+        continue
+      }
+      console.error(`[Spotify] Failed to add batch: ${msg}`)
+      return { added: i, failed: trackUris.length - i }
     }
-
-    // Small delay between tracks to respect rate limits
-    await new Promise((r) => setTimeout(r, 300))
   }
 
-  console.log(`[Spotify] addTracksToPlaylist complete: ${added} added, ${failed} failed out of ${trackUris.length}`)
-  return { added, failed }
+  console.log(`[Spotify] addTracksToPlaylist complete: ${trackUris.length} added`)
+  return { added: trackUris.length, failed: 0 }
 }

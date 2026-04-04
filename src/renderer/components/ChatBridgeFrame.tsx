@@ -5,7 +5,7 @@ import { authStore, API_BASE } from '../stores/authStore'
 import { chatBridgeStore } from '../stores/chatBridgeStore'
 
 const READY_TIMEOUT_MS = 5_000
-const TOOL_TIMEOUT_MS = 10_000
+const TOOL_TIMEOUT_MS = 60_000
 
 /** Resolve a possibly-relative app URL to an absolute one.
  *  In dev the Express server runs on port 3000 while Vite/Electron runs elsewhere.

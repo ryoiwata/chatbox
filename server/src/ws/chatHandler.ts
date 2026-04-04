@@ -29,7 +29,7 @@ type IncomingUserMessage = z.infer<typeof UserMessageSchema>
 type AppContext = z.infer<typeof AppContextSchema>
 
 const MAX_TOOL_LOOP_DEPTH = 5
-const TOOL_RESULT_TIMEOUT_MS = 10_000
+const TOOL_RESULT_TIMEOUT_MS = 60_000
 
 function send(ws: WebSocket, data: Record<string, unknown>): void {
   if (ws.readyState === WebSocket.OPEN) {
