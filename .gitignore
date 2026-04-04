@@ -194,3 +194,4 @@ storybook-static
 .claude/tracking
 firebase-debug.log
 .mcp.json
+.playwright-mcp/
