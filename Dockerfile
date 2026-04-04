@@ -23,8 +23,8 @@ RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --ignore-scr
 # Copy all source
 COPY . .
 
-# Build web frontend (non-fatal — the server is the primary artifact)
-RUN pnpm build:web || echo 'web build skipped'
+# Build web frontend — run electron-vite directly (skip delete-sourcemaps which needs ts-node)
+RUN npx cross-env CHATBOX_BUILD_PLATFORM=web npx electron-vite build
 
 # Build third-party demo apps
 RUN cd apps/chess && npm install && npm run build
