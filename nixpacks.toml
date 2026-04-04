@@ -6,7 +6,7 @@ nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = [
-  "npm install -g pnpm@10.33.0 && pnpm install --frozen-lockfile || pnpm install",
+  "npm install -g pnpm@10.33.0 && /usr/local/bin/pnpm install --frozen-lockfile || /usr/local/bin/pnpm install",
   "cd apps/chess && npm install",
   "cd apps/weather && npm install",
   "cd apps/spotify && npm install",
@@ -15,7 +15,7 @@ cmds = [
 
 [phases.build]
 cmds = [
-  "pnpm build:web || echo 'web build skipped'",
+  "/usr/local/bin/pnpm build:web || echo 'web build skipped'",
   "cd apps/chess && npm run build",
   "cd apps/weather && npm run build",
   "cd apps/spotify && npm run build",
