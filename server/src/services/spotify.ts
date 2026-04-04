@@ -178,19 +178,32 @@ export async function addTracksToPlaylist(
   for (let i = 0; i < trackUris.length; i += 100) {
     const batch = trackUris.slice(i, i + 100)
     try {
-      await spotifyFetch(accessToken, `/playlists/${playlistId}/tracks`, {
+      // Try POST with JSON body first
+      await spotifyFetch(accessToken, '/playlists/' + playlistId + '/tracks', {
         method: 'POST',
         body: JSON.stringify({ uris: batch }),
       })
     } catch (err) {
       if (err instanceof Error && err.message === 'permission_denied') {
-        // Retry once after a delay — Spotify dev mode may need propagation time
-        console.log(`[Spotify] Retrying addTracksToPlaylist after 403 (delay 1.5s)`)
-        await new Promise((r) => setTimeout(r, 1500))
-        await spotifyFetch(accessToken, `/playlists/${playlistId}/tracks`, {
-          method: 'POST',
-          body: JSON.stringify({ uris: batch }),
-        })
+        // Fallback: try POST with URIs as query parameter (alternative Spotify API format)
+        console.log('[Spotify] POST body failed with 403, trying query param format')
+        const urisParam = encodeURIComponent(batch.join(','))
+        try {
+          await spotifyFetch(accessToken, '/playlists/' + playlistId + '/tracks?uris=' + urisParam, {
+            method: 'POST',
+          })
+        } catch (err2) {
+          if (err2 instanceof Error && err2.message === 'permission_denied') {
+            // Last resort: try PUT (replace items) instead of POST (add items)
+            console.log('[Spotify] Query param also failed, trying PUT')
+            await spotifyFetch(accessToken, '/playlists/' + playlistId + '/tracks', {
+              method: 'PUT',
+              body: JSON.stringify({ uris: batch }),
+            })
+          } else {
+            throw err2
+          }
+        }
       } else {
         throw err
       }
