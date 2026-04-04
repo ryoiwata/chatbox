@@ -34,6 +34,7 @@ type ChatBridgeState = {
   getWsClient: () => ChatBridgeWsClient | null
   setWsClient: (client: ChatBridgeWsClient) => void
   recordFailure: (sessionId: string, appName: string) => number
+  resetFailures: (sessionId: string, appName: string) => void
   addPendingToolCall: (toolCallId: string, pending: PendingToolCall) => void
   removePendingToolCall: (toolCallId: string) => void
   setToolInvoker: (sessionId: string, fn: ToolInvoker | null) => void
@@ -149,7 +150,27 @@ export const chatBridgeStore = create<ChatBridgeState>()((set, get) => ({
         },
       },
     }))
+    if (newCount >= 3) {
+      console.error(`[ChatBridge] Circuit breaker: ${appName} deactivated after ${newCount} consecutive failures`)
+      get().deactivateApp(sessionId, appName)
+    }
     return newCount
+  },
+
+  resetFailures: (sessionId, appName) => {
+    set((state) => {
+      const existing = state.sessions[sessionId]
+      if (!existing) return state
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...existing,
+            failureCounts: { ...existing.failureCounts, [appName]: 0 },
+          },
+        },
+      }
+    })
   },
 
   addPendingToolCall: (toolCallId, pending) => {
