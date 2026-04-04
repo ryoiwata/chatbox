@@ -90,7 +90,9 @@ export default defineConfig(({ mode }) => {
   return {
     main: {
       plugins: [
-        ...(isProduction
+        // In web/Docker builds, use externalizeDepsPlugin to skip bundling Electron deps
+        // that aren't available (--ignore-scripts). In native production builds, bundle them.
+        ...(isProduction && !isWeb
           ? [
               visualizer({
                 filename: 'release/app/dist/main/stats.html',
