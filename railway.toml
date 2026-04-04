@@ -1,7 +1,6 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-watchPatterns = ["/**"]
 
 [deploy]
 startCommand = "cd server && npx prisma migrate deploy && node dist/index.js"
