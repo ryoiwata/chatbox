@@ -1,3 +1,6 @@
+[variables]
+npm_config_prefix = "/usr/local"
+
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 
