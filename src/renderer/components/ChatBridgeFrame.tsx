@@ -57,11 +57,11 @@ export function ChatBridgeFrame({ sessionId }: Props) {
 
         iframeRef.current?.contentWindow?.postMessage(
           { type: 'tool_invoke', toolCallId, toolName, params },
-          '*' // sandboxed iframe has opaque null origin — must use '*' to reach it
+          resolvedBase ? new URL(resolvedBase).origin : '*'
         )
       })
     },
-    []
+    [resolvedBase]
   )
 
   // Register invokeToolAndWait with the store so generation.ts can call it
@@ -114,7 +114,7 @@ export function ChatBridgeFrame({ sessionId }: Props) {
       if (data?.type === 'oauth_complete' && typeof data.provider === 'string') {
         iframeRef.current?.contentWindow?.postMessage(
           { type: 'auth_ready', provider: data.provider },
-          '*'
+          resolvedBase ? new URL(resolvedBase).origin : '*'
         )
       }
     }
@@ -176,7 +176,7 @@ export function ChatBridgeFrame({ sessionId }: Props) {
           key={`${resolvedBase}-${retryKey}`}
           ref={iframeRef}
           src={appUrl}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-same-origin"
           referrerPolicy="no-referrer"
           title={activeAppName}
           className="w-full h-full border-none"
