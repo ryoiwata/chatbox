@@ -90,8 +90,6 @@ export default defineConfig(({ mode }) => {
   return {
     main: {
       plugins: [
-        // In web/Docker builds, use externalizeDepsPlugin to skip bundling Electron deps
-        // that aren't available (--ignore-scripts). In native production builds, bundle them.
         ...(isProduction && !isWeb
           ? [
               visualizer({
@@ -100,22 +98,7 @@ export default defineConfig(({ mode }) => {
                 title: 'Main Process Dependency Analysis',
               }),
             ]
-          : [
-              // Externalize ALL node_modules in web/Docker builds since Electron
-              // native deps aren't installed (--ignore-scripts)
-              {
-                name: 'externalize-all-deps',
-                enforce: 'pre' as const,
-                config(config: any) {
-                  config.build = config.build || {}
-                  config.build.rollupOptions = config.build.rollupOptions || {}
-                  config.build.rollupOptions.external = (id: string) => {
-                    if (id.startsWith('.') || id.startsWith('/') || id.startsWith('src/')) return false
-                    return true
-                  }
-                }
-              }
-            ]),
+          : []),
         process.env.SENTRY_AUTH_TOKEN
           ? sentryVitePlugin({
               authToken: process.env.SENTRY_AUTH_TOKEN,
@@ -141,7 +124,15 @@ export default defineConfig(({ mode }) => {
         sourcemap: isProduction ? 'hidden' : true,
         minify: isProduction,
         rollupOptions: {
-          external: Object.keys(packageJson.dependencies || {}),
+          // In web/Docker builds, externalize ALL node_modules since Electron
+          // native deps aren't installed (--ignore-scripts). Only the renderer
+          // output matters for web — main/preload are unused.
+          external: isWeb
+            ? (id: string) => {
+                if (id.startsWith('.') || id.startsWith('/') || id.startsWith('src/')) return false
+                return true
+              }
+            : Object.keys(packageJson.dependencies || {}),
           output: {
             entryFileNames: '[name].js',
             inlineDynamicImports: true,
