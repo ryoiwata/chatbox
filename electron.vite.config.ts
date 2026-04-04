@@ -100,7 +100,22 @@ export default defineConfig(({ mode }) => {
                 title: 'Main Process Dependency Analysis',
               }),
             ]
-          : [externalizeDepsPlugin({ include: ["source-map-support"] })]),
+          : [
+              // Externalize ALL node_modules in web/Docker builds since Electron
+              // native deps aren't installed (--ignore-scripts)
+              {
+                name: 'externalize-all-deps',
+                enforce: 'pre' as const,
+                config(config: any) {
+                  config.build = config.build || {}
+                  config.build.rollupOptions = config.build.rollupOptions || {}
+                  config.build.rollupOptions.external = (id: string) => {
+                    if (id.startsWith('.') || id.startsWith('/') || id.startsWith('src/')) return false
+                    return true
+                  }
+                }
+              }
+            ]),
         process.env.SENTRY_AUTH_TOKEN
           ? sentryVitePlugin({
               authToken: process.env.SENTRY_AUTH_TOKEN,
