@@ -105,10 +105,13 @@ router.post('/create-playlist', async (req: AuthRequest, res) => {
 
     if (trackUris.length > 0) {
       // Brief delay after playlist creation for Spotify propagation
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, 2000))
       try {
-        await addTracksToPlaylist(userId, playlist.id, trackUris, playlist.accessToken)
-        tracksAdded = trackUris.length
+        const result = await addTracksToPlaylist(userId, playlist.id, trackUris)
+        tracksAdded = result.added
+        if (result.failed > 0) {
+          addTracksWarning = `${result.added} tracks added, ${result.failed} failed. You may need to add some tracks manually in Spotify.`
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'unknown'
         console.error('[Spotify] addTracksToPlaylist failed (' + msg + '), returning partial success')

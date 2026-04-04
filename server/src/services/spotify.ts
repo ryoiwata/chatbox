@@ -36,7 +36,7 @@ interface SpotifyCreatePlaylistResponse {
   external_urls: { spotify: string }
 }
 
-async function refreshToken(userId: string): Promise<string | null> {
+export async function refreshToken(userId: string): Promise<string | null> {
   const clientId = process.env.SPOTIFY_CLIENT_ID
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET
   if (!clientId || !clientSecret) return null
@@ -108,13 +108,18 @@ async function spotifyFetch<T>(accessToken: string, path: string, options?: Requ
 
   if (!res.ok) {
     const body = await res.text()
+    const retryAfter = res.headers.get('retry-after')
     if (res.status === 401) {
       console.error(`[Spotify] Token expired/invalid on ${path}: ${body}`)
       throw new Error('auth_required')
     }
     if (res.status === 403) {
-      console.error(`[Spotify] Permission denied on ${path}: ${body}`)
+      console.error(`[Spotify] 403 on ${path}: ${body}${retryAfter ? ` (retry-after: ${retryAfter})` : ''}`)
       throw new Error('permission_denied')
+    }
+    if (res.status === 429) {
+      console.error(`[Spotify] Rate limited on ${path}, retry-after: ${retryAfter}`)
+      throw new Error(`rate_limited:${retryAfter ?? '5'}`)
     }
     throw new Error(`Spotify API ${res.status}: ${body}`)
   }
@@ -148,7 +153,7 @@ export async function createPlaylist(
   userId: string,
   name: string,
   description = ''
-): Promise<{ id: string; url: string; accessToken: string }> {
+): Promise<{ id: string; url: string }> {
   const accessToken = await getSpotifyToken(userId)
   if (!accessToken) throw new Error('auth_required')
 
@@ -158,55 +163,91 @@ export async function createPlaylist(
     '/me/playlists',
     {
       method: 'POST',
-      body: JSON.stringify({ name, description, public: false }),
+      body: JSON.stringify({ name, description, public: true }),
     }
   )
 
-  return { id: playlist.id, url: playlist.external_urls.spotify, accessToken }
+  console.log(`[Spotify] Playlist created: ${playlist.id} (${playlist.external_urls.spotify})`)
+  return { id: playlist.id, url: playlist.external_urls.spotify }
 }
 
 export async function addTracksToPlaylist(
   userId: string,
   playlistId: string,
-  trackUris: string[],
-  accessTokenOverride?: string
-): Promise<void> {
-  const accessToken = accessTokenOverride ?? await getSpotifyToken(userId)
+  trackUris: string[]
+): Promise<{ added: number; failed: number }> {
+  if (trackUris.length === 0) return { added: 0, failed: 0 }
+
+  // Always get a fresh token from DB (not a stale override)
+  let accessToken = await getSpotifyToken(userId)
   if (!accessToken) throw new Error('auth_required')
 
-  // Spotify API max 100 tracks per request
-  for (let i = 0; i < trackUris.length; i += 100) {
-    const batch = trackUris.slice(i, i + 100)
+  let added = 0
+  let failed = 0
+  let refreshedOnce = false
+
+  // Add tracks one at a time to isolate failures and handle rate limits
+  for (const uri of trackUris) {
     try {
-      // Try POST with JSON body first
       await spotifyFetch(accessToken, '/playlists/' + playlistId + '/tracks', {
         method: 'POST',
-        body: JSON.stringify({ uris: batch }),
+        body: JSON.stringify({ uris: [uri] }),
       })
+      added++
+      console.log(`[Spotify] Added track ${added}/${trackUris.length}: ${uri}`)
     } catch (err) {
-      if (err instanceof Error && err.message === 'permission_denied') {
-        // Fallback: try POST with URIs as query parameter (alternative Spotify API format)
-        console.log('[Spotify] POST body failed with 403, trying query param format')
-        const urisParam = encodeURIComponent(batch.join(','))
-        try {
-          await spotifyFetch(accessToken, '/playlists/' + playlistId + '/tracks?uris=' + urisParam, {
-            method: 'POST',
-          })
-        } catch (err2) {
-          if (err2 instanceof Error && err2.message === 'permission_denied') {
-            // Last resort: try PUT (replace items) instead of POST (add items)
-            console.log('[Spotify] Query param also failed, trying PUT')
+      const msg = err instanceof Error ? err.message : 'unknown'
+
+      // On 403, try refreshing the token once (it may have been rotated)
+      if (msg === 'permission_denied' && !refreshedOnce) {
+        refreshedOnce = true
+        console.log('[Spotify] 403 on add track — refreshing token and retrying')
+        const freshToken = await refreshToken(userId)
+        if (freshToken) {
+          accessToken = freshToken
+          // Retry this track with the refreshed token
+          try {
             await spotifyFetch(accessToken, '/playlists/' + playlistId + '/tracks', {
-              method: 'PUT',
-              body: JSON.stringify({ uris: batch }),
+              method: 'POST',
+              body: JSON.stringify({ uris: [uri] }),
             })
-          } else {
-            throw err2
+            added++
+            console.log(`[Spotify] Added track after refresh ${added}/${trackUris.length}: ${uri}`)
+            // Small delay between tracks
+            await new Promise((r) => setTimeout(r, 300))
+            continue
+          } catch (retryErr) {
+            console.error('[Spotify] Retry after refresh also failed:', retryErr instanceof Error ? retryErr.message : retryErr)
           }
         }
+        failed++
+        console.error(`[Spotify] Failed to add track ${uri}: ${msg}`)
+      } else if (msg.startsWith('rate_limited:')) {
+        // Wait for the retry-after period and retry
+        const waitSec = parseInt(msg.split(':')[1] ?? '5', 10)
+        console.log(`[Spotify] Rate limited, waiting ${waitSec}s`)
+        await new Promise((r) => setTimeout(r, waitSec * 1000))
+        // Retry this track
+        try {
+          await spotifyFetch(accessToken, '/playlists/' + playlistId + '/tracks', {
+            method: 'POST',
+            body: JSON.stringify({ uris: [uri] }),
+          })
+          added++
+        } catch {
+          failed++
+          console.error(`[Spotify] Failed to add track after rate limit wait: ${uri}`)
+        }
       } else {
-        throw err
+        failed++
+        console.error(`[Spotify] Failed to add track ${uri}: ${msg}`)
       }
     }
+
+    // Small delay between tracks to respect rate limits
+    await new Promise((r) => setTimeout(r, 300))
   }
+
+  console.log(`[Spotify] addTracksToPlaylist complete: ${added} added, ${failed} failed out of ${trackUris.length}`)
+  return { added, failed }
 }
