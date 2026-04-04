@@ -17,7 +17,7 @@ setInterval(() => {
 }, 5 * 60 * 1000)
 
 const JWT_SECRET = process.env.JWT_SECRET as string
-const CLIENT_URL = process.env.CLIENT_URL ?? 'http://localhost:3000'
+const CLIENT_URL = process.env.CLIENT_URL ?? 'http://127.0.0.1:3000'
 const SPOTIFY_REDIRECT_URI = `${CLIENT_URL}/api/oauth/spotify/callback`
 
 // GET /api/oauth/spotify/authorize?token=JWT
