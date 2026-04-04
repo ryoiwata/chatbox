@@ -1,0 +1,28 @@
+[variables]
+ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
+NODE_ENV = "production"
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = [
+  "npm install -g pnpm",
+  "pnpm install --frozen-lockfile",
+  "cd apps/chess && npm install",
+  "cd apps/weather && npm install",
+  "cd apps/spotify && npm install",
+  "cd server && npm install"
+]
+
+[phases.build]
+cmds = [
+  "pnpm build:web",
+  "npm run build --prefix apps/chess",
+  "npm run build --prefix apps/weather",
+  "npm run build --prefix apps/spotify",
+  "cd server && npm run build && npx prisma generate"
+]
+
+[start]
+cmd = "cd server && npx prisma migrate deploy && node dist/index.js"

@@ -324,6 +324,44 @@ chatbridge/
 
 ## Deployment
 
+### Railway (one service)
+
+Express serves everything: API, WebSocket, demo app SPAs, and the built Chatbox frontend.
+
+**Steps:**
+
+1. Push to GitLab/GitHub and connect the repo to Railway
+2. Add a **Postgres** plugin in Railway
+3. Set these environment variables in Railway:
+
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key |
+| `JWT_SECRET` | Yes | Random 32+ character string |
+| `CLIENT_URL` | Yes | Your Railway service URL (e.g. `https://chatbridge.up.railway.app`) |
+| `WEATHER_API_KEY` | No | OpenWeatherMap API key |
+| `SPOTIFY_CLIENT_ID` | No | Spotify app client ID |
+| `SPOTIFY_CLIENT_SECRET` | No | Spotify app client secret |
+
+> `DATABASE_URL` and `PORT` are set automatically by Railway.
+
+4. Deploy — Railway runs `npx prisma migrate deploy` automatically on start
+
+**Build output:**
+- Frontend → `release/app/dist/renderer/` (served at `/`)
+- Chess app → `apps/chess/dist/` (served at `/apps/chess/`)
+- Weather app → `apps/weather/dist/` (served at `/apps/weather/`)
+- Spotify app → `apps/spotify/dist/` (served at `/apps/spotify/`)
+- API → `/api/*`
+- WebSocket → `/ws`
+
+**Local production build test:**
+```bash
+pnpm build:all          # builds frontend + all apps + server
+cd server && node dist/index.js
+# visit http://localhost:3000
+```
+
 ### Railway (recommended)
 
 The project deploys as a single Railway project with three services:

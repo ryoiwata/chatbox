@@ -70,7 +70,12 @@ app.use('/apps/chess', express.static(path.join(__dirname, '../../apps/chess/dis
 app.use('/apps/spotify', express.static(path.join(__dirname, '../../apps/spotify/dist')))
 // Static: demo apps and built frontend (populated in later milestones)
 app.use('/apps', express.static(path.join(__dirname, '../../apps')))
-app.use(express.static(path.join(__dirname, '../../dist')))
+app.use(express.static(path.join(__dirname, '../../release/app/dist/renderer')))
+
+// SPA catch-all — serve Chatbox frontend for all unmatched routes (must be last)
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../../release/app/dist/renderer/index.html'))
+})
 
 const server = createServer(app)
 
