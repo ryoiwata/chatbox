@@ -12,8 +12,8 @@ ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 # Install pnpm — node:20-slim has /usr/local/bin in PATH so this works
 RUN npm install -g pnpm@10.33.0
 
-# Copy workspace manifests first for layer caching
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Copy workspace manifests and pnpm config first for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY release/app/package.json release/app/
 COPY patches/ patches/
 
