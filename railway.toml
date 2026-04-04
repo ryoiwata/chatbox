@@ -1,6 +1,7 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
+watchPatterns = ["src/**", "server/**", "apps/**", "Dockerfile", "railway.toml", "package.json", "pnpm-lock.yaml", "release/**", "patches/**"]
 
 [deploy]
 startCommand = "cd server && npx prisma migrate deploy && node dist/index.js"
