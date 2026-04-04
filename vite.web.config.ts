@@ -14,19 +14,20 @@ import { defineConfig } from 'vite'
 import { dvhToVh, injectBaseTag, injectReleaseDate, replacePlausibleDomain } from './electron.vite.config'
 
 export default defineConfig({
-  root: 'src/renderer',
+  root: path.resolve(__dirname, 'src/renderer'),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src/renderer'),
       '@shared': path.resolve(__dirname, 'src/shared'),
+      'src/shared': path.resolve(__dirname, 'src/shared'),
     },
   },
   plugins: [
     TanStackRouterVite({
       target: 'react',
       autoCodeSplitting: true,
-      routesDirectory: './src/renderer/routes',
-      generatedRouteTree: './src/renderer/routeTree.gen.ts',
+      routesDirectory: path.resolve(__dirname, 'src/renderer/routes'),
+      generatedRouteTree: path.resolve(__dirname, 'src/renderer/routeTree.gen.ts'),
     }),
     react({}),
     dvhToVh(),
@@ -34,7 +35,7 @@ export default defineConfig({
     injectReleaseDate(),
     replacePlausibleDomain(),
     visualizer({
-      filename: 'release/app/dist/renderer/stats.html',
+      filename: path.resolve(__dirname, 'release/app/dist/renderer/stats.html'),
       open: false,
       title: 'Renderer Process Dependency Analysis',
     }),
@@ -45,6 +46,10 @@ export default defineConfig({
     target: 'es2020',
     sourcemap: 'hidden',
     minify: 'esbuild',
+    commonjsOptions: {
+      // Ensure commonjs modules in node_modules at project root are found
+      include: [/node_modules/],
+    },
     rollupOptions: {
       output: {
         entryFileNames: 'js/[name].[hash].js',
@@ -81,7 +86,7 @@ export default defineConfig({
     modules: {
       generateScopedName: '[name]__[local]___[hash:base64:5]',
     },
-    postcss: './postcss.config.cjs',
+    postcss: path.resolve(__dirname, 'postcss.config.cjs'),
   },
   define: {
     'process.type': '"renderer"',
