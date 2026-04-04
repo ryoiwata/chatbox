@@ -14,7 +14,8 @@ const TOOL_TIMEOUT_MS = 10_000
 function resolveAppUrl(url: string): string {
   if (url.startsWith('http://') || url.startsWith('https://')) return url
   const base =
-    (import.meta.env as Record<string, string>).VITE_CHATBRIDGE_SERVER_URL || 'http://localhost:3000'
+    (import.meta.env as Record<string, string>).VITE_CHATBRIDGE_SERVER_URL ||
+    (typeof window !== 'undefined' && window.location.protocol === 'https:' ? window.location.origin : 'http://localhost:3000')
   return `${base}${url.startsWith('/') ? url : `/${url}`}`
 }
 

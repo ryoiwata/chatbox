@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 
 export const API_BASE = (() => {
+  // In production, frontend and backend are served from the same origin
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    return window.location.origin
+  }
   const wsUrl = (import.meta.env.VITE_CHATBRIDGE_WS_URL as string | undefined) ?? 'ws://localhost:3000/ws'
   try {
     const url = new URL(wsUrl)
