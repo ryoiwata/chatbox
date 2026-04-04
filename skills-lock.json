@@ -66,6 +66,11 @@
       "sourceType": "github",
       "computedHash": "01a94f035a1c3a1a405f611c0df212433d8973f18bf16e94540875ec58ee7b9b"
     },
+    "use-railway": {
+      "source": "railwayapp/railway-skills",
+      "sourceType": "github",
+      "computedHash": "c1a12a7b4914878399c0d634c49498fdb3bff1d91ef2c125932491bde3a4190a"
+    },
     "websocket-engineer": {
       "source": "jeffallan/claude-skills",
       "sourceType": "github",
