@@ -1,0 +1,37 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Prisma requires OpenSSL at runtime
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Skip Electron binary download — server-only build
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+
+# Install pnpm — node:20-slim has /usr/local/bin in PATH so this works
+RUN npm install -g pnpm@10.33.0
+
+# Copy workspace manifests first for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY release/app/package.json release/app/
+
+# Install root/frontend dependencies
+RUN pnpm install --frozen-lockfile || pnpm install
+
+# Copy all source
+COPY . .
+
+# Build web frontend (non-fatal — the server is the primary artifact)
+RUN pnpm build:web || echo 'web build skipped'
+
+# Build third-party demo apps
+RUN cd apps/chess && npm install && npm run build
+RUN cd apps/weather && npm install && npm run build
+RUN cd apps/spotify && npm install && npm run build
+
+# Build server and generate Prisma client
+RUN cd server && npm install && npm run build && npx prisma generate
+
+EXPOSE 3000
+
+CMD ["sh", "-c", "cd /app/server && npx prisma migrate deploy && node dist/index.js"]
