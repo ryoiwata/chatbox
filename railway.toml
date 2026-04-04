@@ -4,7 +4,7 @@ dockerfilePath = "Dockerfile"
 watchPatterns = ["src/**", "server/**", "apps/**", "Dockerfile", "railway.toml", "package.json", "pnpm-lock.yaml", "release/**", "patches/**"]
 
 [deploy]
-startCommand = "cd server && npx prisma migrate deploy && node dist/index.js"
+startCommand = "sh -c 'cd server && npx prisma migrate deploy && node dist/index.js'"
 healthcheckPath = "/api/health"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
