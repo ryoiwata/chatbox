@@ -15,6 +15,7 @@ RUN npm install -g pnpm@10.33.0
 # Copy workspace manifests first for layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY release/app/package.json release/app/
+COPY patches/ patches/
 
 # Install root/frontend dependencies
 RUN pnpm install --frozen-lockfile || pnpm install
