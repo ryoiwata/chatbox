@@ -8,13 +8,14 @@ const router = Router()
 // In-memory CSRF state store (single-instance — fine for sprint)
 const pendingStates = new Map<string, { userId: string; expiresAt: number }>()
 
-// Clean up expired states every 5 minutes
-setInterval(() => {
+// Clean up expired states every 5 minutes (unref so it doesn't block test/process exit)
+const cleanupInterval = setInterval(() => {
   const now = Date.now()
   for (const [key, val] of pendingStates) {
     if (val.expiresAt < now) pendingStates.delete(key)
   }
 }, 5 * 60 * 1000)
+cleanupInterval.unref()
 
 const JWT_SECRET = process.env.JWT_SECRET as string
 const CLIENT_URL = process.env.CLIENT_URL ?? 'http://127.0.0.1:3000'

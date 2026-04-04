@@ -114,6 +114,9 @@ server.on('upgrade', (request, socket, head) => {
   })
 })
 
+// Export for supertest (HTTP tests) and WebSocket tests
+export { app, server }
+
 // Verify DB connectivity and start listening
 async function start(): Promise<void> {
   try {
@@ -131,4 +134,7 @@ async function start(): Promise<void> {
   })
 }
 
-start()
+// Only auto-start when run directly (not when imported by tests)
+if (require.main === module) {
+  void start()
+}
