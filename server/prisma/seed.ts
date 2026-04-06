@@ -140,10 +140,12 @@ async function main(): Promise<void> {
 
   const spotifyApp = await prisma.appRegistration.upsert({
     where: { id: 'spotify' },
-    update: { status: 'approved' },
+    update: { status: 'approved', authRequired: true, authProvider: 'spotify' },
     create: {
       id: 'spotify',
       name: 'Spotify',
+      authRequired: true,
+      authProvider: 'spotify',
       url: '/apps/spotify',
       description: 'Spotify playlist creator. Search for tracks and create playlists using natural language.',
       toolSchemas: [
