@@ -20,14 +20,16 @@ model User {
 }
 
 model AppRegistration {
-  id          String   @id @default(uuid())
-  name        String
-  url         String
-  description String
-  toolSchemas Json     @map("tool_schemas")
-  status      String   @default("pending")
-  timeout     Int      @default(10000)
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  name         String
+  url          String
+  description  String
+  toolSchemas  Json     @map("tool_schemas")
+  status       String   @default("pending")
+  timeout      Int      @default(10000)
+  authRequired Boolean  @default(false) @map("auth_required")
+  authProvider String?  @map("auth_provider")
+  createdAt    DateTime @default(now()) @map("created_at")
 }
 
 model OAuthToken {

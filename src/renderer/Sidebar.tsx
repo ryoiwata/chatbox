@@ -7,6 +7,7 @@ import {
   IconInfoCircle,
   IconLayoutSidebarLeftCollapse,
   IconLogout,
+  IconShieldCheck,
   IconMessageChatbot,
   IconPhotoPlus,
   IconSettingsFilled,
@@ -326,6 +327,15 @@ export default function Sidebar() {
                 label={t('Settings')}
                 leftSection={<ScalableIcon icon={IconSettingsFilled} size={20} />}
                 onClick={() => navigateToSettings()}
+                variant="light"
+                p="xs"
+              />
+              <NavLink
+                c="chatbox-secondary"
+                className="rounded"
+                label="App Review"
+                leftSection={<ScalableIcon icon={IconShieldCheck} size={20} />}
+                onClick={() => navigate({ to: '/admin' })}
                 variant="light"
                 p="xs"
               />
