@@ -104,7 +104,7 @@ async function persistToolResult(conversationId: string, toolCallId: string, res
   })
 }
 
-function buildSystemPrompt(appContext?: AppContext): string {
+export function buildSystemPrompt(appContext?: AppContext): string {
   let prompt = 'You are a helpful AI assistant on ChatBridge, an educational platform.'
 
   if (appContext?.activeApps?.length) {
@@ -124,8 +124,9 @@ function buildSystemPrompt(appContext?: AppContext): string {
   return prompt
 }
 
-function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | undefined {
-  if (!activeApps || activeApps.length === 0) return undefined
+export function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | undefined {
+  // undefined means this is not a ChatBridge message — no tools needed
+  if (!activeApps) return undefined
 
   const allTools: Record<string, Anthropic.Tool[]> = {
     'Test App': [
@@ -268,8 +269,24 @@ function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | undefined 
     ],
   }
 
-  const tools = activeApps.flatMap((app) => allTools[app] ?? [])
-  return tools.length > 0 ? tools : undefined
+  const allAppNames = Object.keys(allTools)
+  const activateAppTool: Anthropic.Tool = {
+    name: 'activate_app',
+    description: `Activate or switch to a third-party application. Available apps: ${allAppNames.join(', ')}. Call this when the user wants to use a different app or switch to another app.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        appName: {
+          type: 'string',
+          description: `Name of the app to activate. Must be one of: ${allAppNames.join(', ')}`,
+        },
+      },
+      required: ['appName'],
+    },
+  }
+
+  const appTools = activeApps.flatMap((app) => allTools[app] ?? [])
+  return [activateAppTool, ...appTools]
 }
 
 function waitForToolResult(ws: WebSocket, toolCallId: string, timeoutMs: number): Promise<unknown> {
@@ -372,7 +389,23 @@ async function streamWithToolLoop(
       { role: 'user' as const, content: toolResultContent },
     ]
 
-    await streamWithToolLoop(ws, conversationId, continuationMessages, systemPrompt, tools, depth + 1)
+    // If activate_app was called, rebuild tools and system prompt for the new app
+    let effectiveTools = tools
+    let effectiveSystemPrompt = systemPrompt
+    for (let i = 0; i < toolUseBlocks.length; i++) {
+      if (toolUseBlocks[i].name === 'activate_app') {
+        const result = results[i] as Record<string, unknown> | undefined
+        if (result?.status === 'activated' && typeof result.app === 'string') {
+          effectiveTools = getAnthropicTools([result.app])
+          effectiveSystemPrompt = buildSystemPrompt({
+            activeApps: [result.app],
+            states: {},
+          })
+        }
+      }
+    }
+
+    await streamWithToolLoop(ws, conversationId, continuationMessages, effectiveSystemPrompt, effectiveTools, depth + 1)
     return
   }
 

@@ -37,6 +37,7 @@ import { uiStore } from '../uiStore'
 import { createNewFork, findMessageLocation } from './forks'
 import { insertMessageAfter, modifyMessage } from './messages'
 import { chatBridgeStore } from '../chatBridgeStore'
+import { chatBridgeController } from '../../packages/chatbridge/controller'
 
 /**
  * Get session-level web browsing setting
@@ -204,6 +205,27 @@ export async function generate(
                   void modifyMessage(sessionId, targetMsg, false, true)
                 },
                 onToolCall: async ({ toolCallId, toolName, params }) => {
+                  // Handle activate_app locally — switches the active app in the store
+                  if (toolName === 'activate_app') {
+                    const { appName } = params as { appName: string }
+                    const registry = chatBridgeStore.getState().registry
+                    const app = registry.find((a) => a.name.toLowerCase() === appName.toLowerCase())
+                    if (!app) {
+                      wsClient.sendToolResult(toolCallId, {
+                        error: `App "${appName}" not found. Available: ${registry.map((a: { name: string }) => a.name).join(', ')}`,
+                      })
+                      return
+                    }
+                    await chatBridgeController.activate(sessionId, app)
+                    wsClient.sendToolResult(toolCallId, {
+                      status: 'activated',
+                      app: app.name,
+                      tools: app.tools.map((t: { name: string }) => t.name),
+                      description: app.description,
+                    })
+                    return
+                  }
+
                   const activeAppName = chatBridgeStore.getState().getActiveApp(sessionId)
                   const invoker = chatBridgeStore.getState().getToolInvoker(sessionId)
                   if (!invoker) {
