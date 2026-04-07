@@ -159,7 +159,7 @@ function RouteComponent() {
 
   const hasActiveApps = useStore(
     chatBridgeStore,
-    (s) => (s.sessions[currentSessionId]?.apps.length ?? 0) > 0
+    (s) => Object.keys(s.sessions[currentSessionId]?.apps ?? {}).length > 0
   )
 
   const model = useMemo(() => {

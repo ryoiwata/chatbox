@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma'
 const AppContextSchema = z.object({
   activeApps: z.array(z.string()).optional(),
   states: z.record(z.unknown()).optional(),
+  previousApps: z.array(z.string()).optional(),
 })
 
 const UserMessageSchema = z.object({
@@ -107,13 +108,17 @@ function buildSystemPrompt(appContext?: AppContext): string {
   let prompt = 'You are a helpful AI assistant on ChatBridge, an educational platform.'
 
   if (appContext?.activeApps?.length) {
-    prompt += `\n\nActive applications: ${appContext.activeApps.join(', ')}.`
+    prompt += `\n\nActive application: ${appContext.activeApps[0]}.`
     if (appContext.states) {
       for (const [app, state] of Object.entries(appContext.states)) {
         prompt += `\n${app} current state: ${JSON.stringify(state)}`
       }
     }
-    prompt += '\n\nYou can use the available tools to interact with these applications.'
+    prompt += '\n\nYou can use the available tools to interact with this application.'
+  }
+
+  if (appContext?.previousApps?.length) {
+    prompt += `\n\nPreviously used apps (available to switch back to): ${appContext.previousApps.join(', ')}.`
   }
 
   return prompt

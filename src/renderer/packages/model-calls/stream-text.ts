@@ -351,9 +351,13 @@ export async function streamText(
         },
       })
 
-      // Inject each registered app's tools. The execute handler waits (up to 8 s)
-      // for the iframe invoker to be registered by ChatBridgeFrame's useEffect.
-      for (const app of chatBridgeRegistry) {
+      // Inject only the active app's tools (not all registered apps).
+      // This reduces token cost and prevents Claude from calling tools for suspended apps.
+      const activeAppName = sessionId ? chatBridgeStore.getState().getActiveApp(sessionId) : null
+      const activeApps = activeAppName
+        ? chatBridgeRegistry.filter((a) => a.name === activeAppName)
+        : []
+      for (const app of activeApps) {
         for (const appTool of app.tools) {
           if (tools[appTool.name]) continue // don't shadow existing tools
           const params = appTool.parameters as Record<string, unknown>
