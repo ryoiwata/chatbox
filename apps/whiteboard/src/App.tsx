@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import Canvas, { type CanvasHandle } from './Canvas'
+import Canvas, { type CanvasHandle, type Stroke } from './Canvas'
 import Toolbar from './Toolbar'
 import './App.css'
 
@@ -75,7 +75,148 @@ const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    name: 'draw_strokes',
+    description:
+      'Draw strokes on the canvas programmatically. Lets Claude illustrate concepts or play drawing games. Strokes are animated so the student sees them drawn.',
+    parameters: {
+      type: 'object',
+      properties: {
+        strokes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              points: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    x: { type: 'number', description: 'X coordinate (0-800)' },
+                    y: { type: 'number', description: 'Y coordinate (0-600)' },
+                  },
+                  required: ['x', 'y'],
+                },
+              },
+              color: {
+                type: 'string',
+                description: "CSS color string, e.g. '#FF0000' or 'red'",
+              },
+              width: {
+                type: 'number',
+                description: 'Stroke width in pixels, e.g. 3',
+              },
+            },
+            required: ['points'],
+          },
+          description:
+            'Array of strokes to draw. Each stroke is a series of connected points.',
+        },
+        clearFirst: {
+          type: 'boolean',
+          description: 'If true, clear the canvas before drawing. Default false.',
+        },
+      },
+      required: ['strokes'],
+    },
+  },
+  {
+    name: 'draw_shape',
+    description:
+      'Draw a common shape on the canvas. Higher-level than draw_strokes — no need to compute raw coordinates.',
+    parameters: {
+      type: 'object',
+      properties: {
+        shape: {
+          type: 'string',
+          enum: ['circle', 'rectangle', 'line', 'triangle', 'star', 'arrow'],
+          description: 'Shape type',
+        },
+        x: { type: 'number', description: 'Center X (or start X for line/arrow)' },
+        y: { type: 'number', description: 'Center Y (or start Y for line/arrow)' },
+        size: {
+          type: 'number',
+          description: 'Size in pixels (radius for circle, side length for others)',
+        },
+        color: { type: 'string', description: 'CSS color string' },
+        width: { type: 'number', description: 'Stroke width' },
+        rotation: { type: 'number', description: 'Rotation in degrees, default 0' },
+      },
+      required: ['shape', 'x', 'y', 'size'],
+    },
+  },
 ]
+
+function shapeToPoints(
+  shape: string,
+  cx: number,
+  cy: number,
+  size: number,
+  rotation: number
+): Array<{ x: number; y: number }> {
+  const rad = (rotation * Math.PI) / 180
+  const rotate = (px: number, py: number) => ({
+    x: cx + (px - cx) * Math.cos(rad) - (py - cy) * Math.sin(rad),
+    y: cy + (px - cx) * Math.sin(rad) + (py - cy) * Math.cos(rad),
+  })
+
+  switch (shape) {
+    case 'circle': {
+      const pts: Array<{ x: number; y: number }> = []
+      const steps = 48
+      for (let i = 0; i <= steps; i++) {
+        const angle = (i / steps) * Math.PI * 2
+        pts.push(rotate(cx + Math.cos(angle) * size, cy + Math.sin(angle) * size))
+      }
+      return pts
+    }
+    case 'rectangle': {
+      const half = size / 2
+      return [
+        rotate(cx - half, cy - half),
+        rotate(cx + half, cy - half),
+        rotate(cx + half, cy + half),
+        rotate(cx - half, cy + half),
+        rotate(cx - half, cy - half),
+      ]
+    }
+    case 'line': {
+      return [rotate(cx, cy), rotate(cx + size, cy)]
+    }
+    case 'triangle': {
+      const h = (size * Math.sqrt(3)) / 2
+      return [
+        rotate(cx, cy - (2 * h) / 3),
+        rotate(cx - size / 2, cy + h / 3),
+        rotate(cx + size / 2, cy + h / 3),
+        rotate(cx, cy - (2 * h) / 3),
+      ]
+    }
+    case 'star': {
+      const pts: Array<{ x: number; y: number }> = []
+      const outerR = size
+      const innerR = size * 0.4
+      for (let i = 0; i <= 10; i++) {
+        const angle = (i / 10) * Math.PI * 2 - Math.PI / 2
+        const r = i % 2 === 0 ? outerR : innerR
+        pts.push(rotate(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r))
+      }
+      return pts
+    }
+    case 'arrow': {
+      const endX = cx + size
+      const headLen = size * 0.2
+      // Shaft
+      const shaft = [rotate(cx, cy), rotate(endX, cy)]
+      // Arrowhead
+      const head1 = rotate(endX - headLen, cy - headLen * 0.6)
+      const head2 = rotate(endX - headLen, cy + headLen * 0.6)
+      return [...shaft, head1, rotate(endX, cy), head2]
+    }
+    default:
+      return [{ x: cx, y: cy }]
+  }
+}
 
 export default function App() {
   const canvasRef = useRef<CanvasHandle>(null)
@@ -305,6 +446,78 @@ export default function App() {
             },
             '*'
           )
+          break
+        }
+
+        case 'draw_strokes': {
+          if (!c) {
+            window.parent.postMessage(
+              { type: 'tool_result', toolCallId, result: { error: 'Canvas not ready' } },
+              '*'
+            )
+            return
+          }
+          const rawStrokes = params.strokes as Array<{
+            points: Array<{ x: number; y: number }>
+            color?: string
+            width?: number
+          }>
+          if (!Array.isArray(rawStrokes)) {
+            window.parent.postMessage(
+              { type: 'tool_result', toolCallId, result: { error: 'strokes must be an array' } },
+              '*'
+            )
+            return
+          }
+          const strokesToDraw: Stroke[] = rawStrokes.map((s) => ({
+            points: s.points,
+            color: s.color || '#000000',
+            width: s.width || 3,
+          }))
+          const clearFirst = Boolean(params.clearFirst)
+          c.drawStrokesAnimated(strokesToDraw, clearFirst).then((res) => {
+            window.parent.postMessage(
+              { type: 'tool_result', toolCallId, result: { status: 'drawn', ...res } },
+              '*'
+            )
+            sendStateUpdate()
+          })
+          break
+        }
+
+        case 'draw_shape': {
+          if (!c) {
+            window.parent.postMessage(
+              { type: 'tool_result', toolCallId, result: { error: 'Canvas not ready' } },
+              '*'
+            )
+            return
+          }
+          const shapeName = params.shape as string
+          const sx = params.x as number
+          const sy = params.y as number
+          const sSize = params.size as number
+          const sColor = (params.color as string) || '#000000'
+          const sWidth = (params.width as number) || 3
+          const sRotation = (params.rotation as number) || 0
+
+          if (!shapeName || sx == null || sy == null || !sSize) {
+            window.parent.postMessage(
+              { type: 'tool_result', toolCallId, result: { error: 'shape, x, y, and size are required' } },
+              '*'
+            )
+            return
+          }
+
+          const shapePoints = shapeToPoints(shapeName, sx, sy, sSize, sRotation)
+          const shapeStroke: Stroke = { points: shapePoints, color: sColor, width: sWidth }
+          c.drawStrokesAnimated([shapeStroke], false).then(() => {
+            window.parent.postMessage(
+              { type: 'tool_result', toolCallId, result: { status: 'drawn', shape: shapeName } },
+              '*'
+            )
+            sendStateUpdate()
+          })
           break
         }
 

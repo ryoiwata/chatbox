@@ -279,6 +279,46 @@ const HARDCODED_FALLBACK_APPS: PluginManifest[] = [
           },
         },
       },
+      {
+        name: 'draw_strokes',
+        description: 'Draw strokes on the canvas programmatically. Animated so the student sees them drawn.',
+        parameters: {
+          type: 'object',
+          properties: {
+            strokes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  points: { type: 'array', items: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+                  color: { type: 'string' },
+                  width: { type: 'number' },
+                },
+                required: ['points'],
+              },
+            },
+            clearFirst: { type: 'boolean' },
+          },
+          required: ['strokes'],
+        },
+      },
+      {
+        name: 'draw_shape',
+        description: 'Draw a common shape on the canvas (circle, rectangle, line, triangle, star, arrow).',
+        parameters: {
+          type: 'object',
+          properties: {
+            shape: { type: 'string', enum: ['circle', 'rectangle', 'line', 'triangle', 'star', 'arrow'] },
+            x: { type: 'number' },
+            y: { type: 'number' },
+            size: { type: 'number' },
+            color: { type: 'string' },
+            width: { type: 'number' },
+            rotation: { type: 'number' },
+          },
+          required: ['shape', 'x', 'y', 'size'],
+        },
+      },
     ],
     status: 'approved',
     authRequired: false,

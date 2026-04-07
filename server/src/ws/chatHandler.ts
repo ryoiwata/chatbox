@@ -115,6 +115,10 @@ export function buildSystemPrompt(appContext?: AppContext): string {
       }
     }
     prompt += '\n\nYou can use the available tools to interact with this application.'
+
+    if (appContext.activeApps[0] === 'Whiteboard') {
+      prompt += '\n\nWhen the whiteboard app is active, you can use get_drawing to see what the student has drawn. The image will be sent to you directly — describe what you see. You can also draw on the canvas yourself using draw_strokes (raw coordinate arrays) or draw_shape (high-level shapes like circle, rectangle, triangle, star, arrow, line). The canvas coordinate system is 0-800 width and 0-600 height.'
+    }
   }
 
   if (appContext?.previousApps?.length) {
@@ -258,11 +262,41 @@ async function streamWithToolLoop(
     }
 
     // Build Anthropic continuation messages (exact format required by the API)
-    const toolResultContent: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((tc, i) => ({
-      type: 'tool_result' as const,
-      tool_use_id: tc.id,
-      content: JSON.stringify(results[i]),
-    }))
+    const toolResultContent: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((tc, i) => {
+      const result = results[i] as Record<string, unknown> | null | undefined
+
+      // If the tool result contains an imageDataUrl, send as image content block
+      // so Claude can actually see the drawing via vision
+      if (result && typeof result === 'object' && typeof result.imageDataUrl === 'string') {
+        const dataUrl = result.imageDataUrl as string
+        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '')
+        const { imageDataUrl: _img, ...metadata } = result
+        return {
+          type: 'tool_result' as const,
+          tool_use_id: tc.id,
+          content: [
+            {
+              type: 'image' as const,
+              source: {
+                type: 'base64' as const,
+                media_type: 'image/png' as const,
+                data: base64Data,
+              },
+            },
+            {
+              type: 'text' as const,
+              text: JSON.stringify(metadata),
+            },
+          ],
+        }
+      }
+
+      return {
+        type: 'tool_result' as const,
+        tool_use_id: tc.id,
+        content: JSON.stringify(result),
+      }
+    })
 
     const continuationMessages: Anthropic.MessageParam[] = [
       ...messages,

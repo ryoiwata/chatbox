@@ -263,75 +263,119 @@ async function main(): Promise<void> {
   })
   console.log(`App registration: ${flashcardsApp.name} (${flashcardsApp.status})`)
 
+  const whiteboardToolSchemas = [
+    {
+      name: 'clear_canvas',
+      description: 'Clears the drawing canvas',
+      parameters: {
+        type: 'object',
+        properties: {
+          backgroundColor: { type: 'string', description: 'Background color (defaults to white)' },
+        },
+      },
+    },
+    {
+      name: 'get_drawing',
+      description: 'Captures the current canvas as a base64 PNG data URL. Claude receives the actual image and can describe/analyze what is drawn.',
+      parameters: { type: 'object', properties: {} },
+    },
+    {
+      name: 'get_strokes',
+      description: 'Returns the raw stroke data (coordinate arrays). Lighter weight than get_drawing.',
+      parameters: { type: 'object', properties: {} },
+    },
+    {
+      name: 'set_prompt',
+      description: 'Displays a drawing prompt/instruction to the student above the canvas',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'The drawing prompt to display' },
+          timeLimit: { type: 'number', description: 'Optional countdown in seconds' },
+        },
+        required: ['prompt'],
+      },
+    },
+    {
+      name: 'undo_stroke',
+      description: 'Removes the last stroke from the canvas',
+      parameters: { type: 'object', properties: {} },
+    },
+    {
+      name: 'set_tool',
+      description: 'Changes the drawing tool settings (color, width, or tool type)',
+      parameters: {
+        type: 'object',
+        properties: {
+          color: { type: 'string', description: 'Stroke color (CSS color)' },
+          width: { type: 'number', description: 'Stroke width in pixels' },
+          tool: { type: 'string', enum: ['pen', 'eraser'], description: 'Drawing tool type' },
+        },
+      },
+    },
+    {
+      name: 'draw_strokes',
+      description: 'Draw strokes on the canvas programmatically. Lets Claude illustrate concepts or play drawing games. Strokes are animated so the student sees them drawn.',
+      parameters: {
+        type: 'object',
+        properties: {
+          strokes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                points: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      x: { type: 'number', description: 'X coordinate (0-800)' },
+                      y: { type: 'number', description: 'Y coordinate (0-600)' },
+                    },
+                    required: ['x', 'y'],
+                  },
+                },
+                color: { type: 'string', description: "CSS color string, e.g. '#FF0000' or 'red'" },
+                width: { type: 'number', description: 'Stroke width in pixels, e.g. 3' },
+              },
+              required: ['points'],
+            },
+            description: 'Array of strokes to draw. Each stroke is a series of connected points.',
+          },
+          clearFirst: { type: 'boolean', description: 'If true, clear the canvas before drawing. Default false.' },
+        },
+        required: ['strokes'],
+      },
+    },
+    {
+      name: 'draw_shape',
+      description: 'Draw a common shape on the canvas. Higher-level than draw_strokes — no need to compute raw coordinates.',
+      parameters: {
+        type: 'object',
+        properties: {
+          shape: { type: 'string', enum: ['circle', 'rectangle', 'line', 'triangle', 'star', 'arrow'], description: 'Shape type' },
+          x: { type: 'number', description: 'Center X (or start X for line/arrow)' },
+          y: { type: 'number', description: 'Center Y (or start Y for line/arrow)' },
+          size: { type: 'number', description: 'Size in pixels (radius for circle, side length for others)' },
+          color: { type: 'string', description: 'CSS color string' },
+          width: { type: 'number', description: 'Stroke width' },
+          rotation: { type: 'number', description: 'Rotation in degrees, default 0' },
+        },
+        required: ['shape', 'x', 'y', 'size'],
+      },
+    },
+  ]
+
   const whiteboardApp = await prisma.appRegistration.upsert({
     where: { id: 'whiteboard' },
-    update: { status: 'approved' },
+    update: { status: 'approved', toolSchemas: whiteboardToolSchemas },
     create: {
       id: 'whiteboard',
       name: 'Whiteboard',
       url: '/apps/whiteboard',
       description:
-        'Drawing canvas for students. Claude can set drawing prompts, capture drawings as images, and analyze stroke data.',
-      toolSchemas: [
-        {
-          name: 'clear_canvas',
-          description: 'Clears the drawing canvas',
-          parameters: {
-            type: 'object',
-            properties: {
-              backgroundColor: { type: 'string', description: 'Background color (defaults to white)' },
-            },
-          },
-        },
-        {
-          name: 'get_drawing',
-          description: 'Captures the current canvas as a base64 PNG data URL',
-          parameters: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'get_strokes',
-          description: 'Returns the raw stroke data (coordinate arrays)',
-          parameters: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'set_prompt',
-          description: 'Displays a drawing prompt/instruction to the student above the canvas',
-          parameters: {
-            type: 'object',
-            properties: {
-              prompt: { type: 'string', description: 'The drawing prompt to display' },
-              timeLimit: { type: 'number', description: 'Optional countdown in seconds' },
-            },
-            required: ['prompt'],
-          },
-        },
-        {
-          name: 'undo_stroke',
-          description: 'Removes the last stroke from the canvas',
-          parameters: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'set_tool',
-          description: 'Changes the drawing tool settings (color, width, or tool type)',
-          parameters: {
-            type: 'object',
-            properties: {
-              color: { type: 'string', description: 'Stroke color (CSS color)' },
-              width: { type: 'number', description: 'Stroke width in pixels' },
-              tool: { type: 'string', enum: ['pen', 'eraser'], description: 'Drawing tool type' },
-            },
-          },
-        },
-      ],
+        'Drawing canvas for students. Claude can set drawing prompts, capture and analyze drawings as images, and draw shapes/strokes on the canvas.',
+      toolSchemas: whiteboardToolSchemas,
       status: 'approved',
     },
   })

@@ -14,6 +14,7 @@ export interface CanvasHandle {
   clearCanvas: (backgroundColor: string) => void
   undoStroke: () => number
   getSize: () => { width: number; height: number }
+  drawStrokesAnimated: (strokes: Stroke[], clearFirst: boolean) => Promise<{ strokesAdded: number; totalStrokes: number }>
 }
 
 interface CanvasProps {
@@ -229,6 +230,56 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(
         const canvas = canvasRef.current
         if (!canvas) return { width: 0, height: 0 }
         return { width: canvas.width, height: canvas.height }
+      },
+      drawStrokesAnimated: async (strokes: Stroke[], clearFirst: boolean) => {
+        const canvas = canvasRef.current
+        if (!canvas) return { strokesAdded: 0, totalStrokes: strokesRef.current.length }
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return { strokesAdded: 0, totalStrokes: strokesRef.current.length }
+
+        if (clearFirst) {
+          bgColorRef.current = '#ffffff'
+          strokesRef.current = []
+          ctx.fillStyle = bgColorRef.current
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+
+        let added = 0
+        for (const stroke of strokes) {
+          if (stroke.points.length < 2) continue
+
+          // Animate: draw point-by-point with delays
+          const animStroke: Stroke = { points: [stroke.points[0]], color: stroke.color, width: stroke.width }
+          for (let i = 1; i < stroke.points.length; i++) {
+            animStroke.points.push(stroke.points[i])
+            const prev = stroke.points[i - 1]
+            const cur = stroke.points[i]
+            ctx.beginPath()
+            ctx.strokeStyle = stroke.color === 'eraser' ? bgColorRef.current : stroke.color
+            ctx.lineWidth = stroke.width
+            ctx.lineCap = 'round'
+            ctx.lineJoin = 'round'
+            ctx.moveTo(prev.x, prev.y)
+            ctx.lineTo(cur.x, cur.y)
+            ctx.stroke()
+
+            // Small delay between segments for animation effect
+            if (i % 3 === 0) {
+              await new Promise((r) => setTimeout(r, 16))
+            }
+          }
+
+          // Add to stroke history for undo support
+          strokesRef.current = [...strokesRef.current, stroke]
+          added++
+
+          // Delay between strokes
+          if (strokes.length > 1) {
+            await new Promise((r) => setTimeout(r, 80))
+          }
+        }
+
+        return { strokesAdded: added, totalStrokes: strokesRef.current.length }
       },
     }))
 
