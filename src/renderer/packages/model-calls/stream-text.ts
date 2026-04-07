@@ -351,13 +351,12 @@ export async function streamText(
         },
       })
 
-      // Inject only the active app's tools (not all registered apps).
-      // This reduces token cost and prevents Claude from calling tools for suspended apps.
-      const activeAppName = sessionId ? chatBridgeStore.getState().getActiveApp(sessionId) : null
-      const activeApps = activeAppName
-        ? chatBridgeRegistry.filter((a) => a.name === activeAppName)
-        : []
-      for (const app of activeApps) {
+      // Inject ALL registered app tools so the LLM can call activate_app and
+      // app-specific tools (e.g. create_deck) in the same turn. The AI SDK's
+      // tool set is static for the duration of model.chat(), so tools must be
+      // present before generation begins. The execute handler polls for the
+      // iframe invoker with an 8s deadline, handling the race with activate_app.
+      for (const app of chatBridgeRegistry) {
         for (const appTool of app.tools) {
           if (tools[appTool.name]) continue // don't shadow existing tools
           const params = appTool.parameters as Record<string, unknown>
@@ -372,6 +371,10 @@ export async function streamText(
               zodType = z.number()
             } else if (val.type === 'boolean') {
               zodType = z.boolean()
+            } else if (val.type === 'array') {
+              zodType = z.array(z.unknown())
+            } else if (val.type === 'object') {
+              zodType = z.record(z.unknown())
             } else {
               zodType = z.string()
             }

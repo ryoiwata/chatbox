@@ -113,62 +113,68 @@ describe('getAnthropicTools — multi-app switching', () => {
     expect(activateApp.description).toContain('Spotify')
   })
 
-  it('returns activate_app + active app tools when an app is active', async () => {
+  it('returns activate_app + ALL approved app tools regardless of active app', async () => {
     const tools = (await getAnthropicTools(['Chess']))!
     const toolNames = tools.map((t) => t.name)
 
     expect(toolNames).toContain('activate_app')
+    // Chess tools present
     expect(toolNames).toContain('start_game')
     expect(toolNames).toContain('make_move')
     expect(toolNames).toContain('get_board_state')
-    // Should NOT include other app tools
-    expect(toolNames).not.toContain('get_current_weather')
-    expect(toolNames).not.toContain('search_tracks')
+    // All other app tools also present so the LLM can call activate_app + app tool in same turn
+    expect(toolNames).toContain('get_current_weather')
+    expect(toolNames).toContain('search_tracks')
+    expect(toolNames).toContain('create_deck')
   })
 
-  it('returns only activate_app when activeApps is empty', async () => {
+  it('returns activate_app + all app tools when activeApps is empty', async () => {
     const tools = (await getAnthropicTools([]))!
-    expect(tools).toHaveLength(1)
-    expect(tools[0].name).toBe('activate_app')
+    const toolNames = tools.map((t) => t.name)
+    expect(toolNames).toContain('activate_app')
+    // All app tools still present so the LLM can activate and use in same turn
+    expect(toolNames).toContain('start_game')
+    expect(toolNames).toContain('create_deck')
+    expect(toolNames).toContain('get_current_weather')
   })
 
   it('returns undefined when activeApps is undefined (non-ChatBridge message)', async () => {
     expect(await getAnthropicTools(undefined)).toBeUndefined()
   })
 
-  it('returns Weather tools + activate_app when Weather is active', async () => {
+  it('returns all tools including Weather when Weather is active', async () => {
     const tools = (await getAnthropicTools(['Weather']))!
     const toolNames = tools.map((t) => t.name)
 
     expect(toolNames).toContain('activate_app')
     expect(toolNames).toContain('get_current_weather')
     expect(toolNames).toContain('get_forecast')
-    expect(toolNames).not.toContain('start_game')
+    // All app tools present
+    expect(toolNames).toContain('start_game')
   })
 
-  it('returns Flashcards tools + activate_app when Flashcards is active', async () => {
+  it('returns all tools including Flashcards when Flashcards is active', async () => {
     const tools = (await getAnthropicTools(['Flashcards']))!
     const toolNames = tools.map((t) => t.name)
 
     expect(toolNames).toContain('activate_app')
     expect(toolNames).toContain('create_deck')
     expect(toolNames).toContain('show_card')
-    expect(toolNames).not.toContain('start_game')
+    // All app tools present
+    expect(toolNames).toContain('start_game')
   })
 
-  it('switches tools when active app changes (simulates activate_app flow)', async () => {
-    // Before: Chess is active
+  it('always returns all tools regardless of which app is active', async () => {
+    // Both calls return the same full tool set
     const chessTools = (await getAnthropicTools(['Chess']))!
     const chessToolNames = chessTools.map((t) => t.name)
     expect(chessToolNames).toContain('start_game')
-    expect(chessToolNames).not.toContain('get_current_weather')
+    expect(chessToolNames).toContain('get_current_weather')
 
-    // After activate_app: Weather is now active
     const weatherTools = (await getAnthropicTools(['Weather']))!
     const weatherToolNames = weatherTools.map((t) => t.name)
     expect(weatherToolNames).toContain('get_current_weather')
-    expect(weatherToolNames).not.toContain('start_game')
-    // activate_app still available for switching again
+    expect(weatherToolNames).toContain('start_game')
     expect(weatherToolNames).toContain('activate_app')
   })
 

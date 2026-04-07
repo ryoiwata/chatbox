@@ -169,9 +169,13 @@ export async function getAnthropicTools(activeApps?: string[]): Promise<Anthropi
     },
   }
 
-  const appToolMap = new Map(approvedApps.map((a) => [a.name, convertToAnthropicTools(a.toolSchemas)]))
-  const appTools = activeApps.flatMap((app) => appToolMap.get(app) ?? [])
-  return [activateAppTool, ...appTools]
+  // Inject ALL approved app tools so the LLM can call activate_app and then
+  // use app-specific tools in the continuation turn. The Anthropic API allows
+  // the model to see all tools; the server rebuilds the tool list after
+  // activate_app succeeds anyway, but having them upfront avoids the case where
+  // the model hallucinates a tool call for an app not yet activated.
+  const allAppTools = approvedApps.flatMap((a) => convertToAnthropicTools(a.toolSchemas))
+  return [activateAppTool, ...allAppTools]
 }
 
 function waitForToolResult(ws: WebSocket, toolCallId: string, timeoutMs: number): Promise<unknown> {

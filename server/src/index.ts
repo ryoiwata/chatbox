@@ -35,6 +35,9 @@ interface JwtPayload {
 
 const app = express()
 
+// Trust first proxy (Railway) so express-rate-limit reads X-Forwarded-For correctly
+app.set('trust proxy', 1)
+
 app.use(express.json())
 
 // Rate limiters
