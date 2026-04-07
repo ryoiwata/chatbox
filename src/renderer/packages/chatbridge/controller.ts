@@ -140,6 +140,80 @@ const HARDCODED_FALLBACK_APPS: PluginManifest[] = [
     authRequired: true,
     authProvider: 'spotify',
   },
+  {
+    id: 'flashcards',
+    name: 'Flashcards',
+    url: '/apps/flashcards',
+    description:
+      'Interactive flashcard quiz. Claude creates decks on any topic, quizzes the student, and tracks their score.',
+    tools: [
+      {
+        name: 'create_deck',
+        description: 'Creates a new flashcard deck with a topic and array of cards',
+        parameters: {
+          type: 'object',
+          properties: {
+            topic: { type: 'string', description: 'The topic of the flashcard deck' },
+            cards: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  front: { type: 'string', description: 'The question or prompt' },
+                  back: { type: 'string', description: 'The answer' },
+                },
+                required: ['front', 'back'],
+              },
+              description: 'Array of flashcard objects with front and back text',
+            },
+          },
+          required: ['topic', 'cards'],
+        },
+      },
+      {
+        name: 'show_card',
+        description: 'Shows a specific card to the student by index',
+        parameters: {
+          type: 'object',
+          properties: {
+            cardIndex: { type: 'number', description: 'Zero-based index of the card to show' },
+            side: { type: 'string', enum: ['front', 'both'], description: 'Show front only or both sides' },
+          },
+          required: ['cardIndex', 'side'],
+        },
+      },
+      {
+        name: 'check_answer',
+        description: "Checks the student's answer against the card back with fuzzy matching",
+        parameters: {
+          type: 'object',
+          properties: {
+            cardIndex: { type: 'number', description: 'Zero-based index of the card' },
+            studentAnswer: { type: 'string', description: "The student's answer" },
+          },
+          required: ['cardIndex', 'studentAnswer'],
+        },
+      },
+      {
+        name: 'get_score',
+        description: 'Returns the current quiz score and per-card results',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'reset_deck',
+        description: 'Clears the current deck and score',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+    ],
+    status: 'approved',
+    authRequired: false,
+  },
 ]
 
 export const chatBridgeController = {

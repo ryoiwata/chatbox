@@ -33,6 +33,7 @@ RUN npx vite build --config vite.web.config.ts
 RUN cd apps/chess && npm install && npm run build
 RUN cd apps/weather && npm install && npm run build
 RUN cd apps/spotify && npm install && npm run build
+RUN cd apps/flashcards && npm install && npm run build
 
 # Build server and generate Prisma client
 RUN cd server && npm install && npm run build && npx prisma generate
