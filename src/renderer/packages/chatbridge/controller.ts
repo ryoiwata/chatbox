@@ -169,7 +169,11 @@ export const chatBridgeController = {
 
   async activate(sessionId: string, app: PluginManifest): Promise<void> {
     const store = chatBridgeStore.getState()
+    // No-op if already the active app
+    if (store.getActiveApp(sessionId) === app.name) return
+
     store.activateSession(sessionId)
+    // activateApp handles suspending the previous app and restoring/creating the new one
     store.activateApp(sessionId, app.name)
 
     let wsClient = store.getWsClient()
@@ -188,10 +192,14 @@ export const chatBridgeController = {
     }
   },
 
+  suspend(sessionId: string, appName: string): void {
+    chatBridgeStore.getState().suspendApp(sessionId, appName)
+  },
+
   deactivate(sessionId: string, appName: string): void {
     chatBridgeStore.getState().deactivateApp(sessionId, appName)
     const session = chatBridgeStore.getState().sessions[sessionId]
-    if (!session?.apps.length) {
+    if (!session || Object.keys(session.apps).length === 0) {
       chatBridgeStore.getState().getWsClient()?.disconnect()
     }
   },

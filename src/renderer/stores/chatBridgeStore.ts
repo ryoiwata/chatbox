@@ -2,10 +2,15 @@ import { create } from 'zustand'
 import type { PluginManifest } from '../../shared/types/chatbridge'
 import type { ChatBridgeWsClient } from '../packages/chatbridge/ws-client'
 
+type AppEntry = {
+  context: Record<string, unknown> // last state_update from this app
+  status: 'active' | 'suspended'
+}
+
 type SessionState = {
   active: boolean
-  apps: string[] // active app names
-  appStates: Record<string, unknown> // latest state_update per app name
+  activeApp: string | null
+  apps: Record<string, AppEntry>
   failureCounts: Record<string, number> // circuit breaker counts per app name
 }
 
@@ -28,8 +33,10 @@ type ChatBridgeState = {
   activateSession: (sessionId: string) => void
   activateApp: (sessionId: string, appName: string) => void
   deactivateApp: (sessionId: string, appName: string) => void
+  suspendApp: (sessionId: string, appName: string) => void
   updateAppState: (sessionId: string, appName: string, state: unknown) => void
   isActive: (sessionId: string) => boolean
+  getActiveApp: (sessionId: string) => string | null
   getAppContext: (sessionId: string) => Record<string, unknown>
   getWsClient: () => ChatBridgeWsClient | null
   setWsClient: (client: ChatBridgeWsClient) => void
@@ -43,8 +50,8 @@ type ChatBridgeState = {
 
 const makeEmptySession = (): SessionState => ({
   active: false,
-  apps: [],
-  appStates: {},
+  activeApp: null,
+  apps: {},
   failureCounts: {},
 })
 
@@ -72,13 +79,26 @@ export const chatBridgeStore = create<ChatBridgeState>()((set, get) => ({
   activateApp: (sessionId, appName) => {
     set((state) => {
       const existing = state.sessions[sessionId] ?? makeEmptySession()
+      // No-op if already the active app
+      if (existing.activeApp === appName) return state
+      // Suspend the currently active app if there is one
+      const updatedApps = { ...existing.apps }
+      if (existing.activeApp && updatedApps[existing.activeApp]) {
+        updatedApps[existing.activeApp] = { ...updatedApps[existing.activeApp], status: 'suspended' }
+      }
+      // Activate or restore the requested app
+      updatedApps[appName] = {
+        context: updatedApps[appName]?.context ?? {},
+        status: 'active',
+      }
       return {
         sessions: {
           ...state.sessions,
           [sessionId]: {
             ...existing,
             active: true,
-            apps: existing.apps.includes(appName) ? existing.apps : [...existing.apps, appName],
+            activeApp: appName,
+            apps: updatedApps,
           },
         },
       }
@@ -89,14 +109,37 @@ export const chatBridgeStore = create<ChatBridgeState>()((set, get) => ({
     set((state) => {
       const existing = state.sessions[sessionId]
       if (!existing) return state
-      const apps = existing.apps.filter((a) => a !== appName)
+      const updatedApps = { ...existing.apps }
+      delete updatedApps[appName]
+      const hasApps = Object.keys(updatedApps).length > 0
       return {
         sessions: {
           ...state.sessions,
           [sessionId]: {
             ...existing,
-            apps,
-            active: apps.length > 0,
+            apps: updatedApps,
+            activeApp: existing.activeApp === appName ? null : existing.activeApp,
+            active: hasApps,
+          },
+        },
+      }
+    })
+  },
+
+  suspendApp: (sessionId, appName) => {
+    set((state) => {
+      const existing = state.sessions[sessionId]
+      if (!existing || !existing.apps[appName]) return state
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...existing,
+            apps: {
+              ...existing.apps,
+              [appName]: { ...existing.apps[appName], status: 'suspended' },
+            },
+            activeApp: existing.activeApp === appName ? null : existing.activeApp,
           },
         },
       }
@@ -106,12 +149,17 @@ export const chatBridgeStore = create<ChatBridgeState>()((set, get) => ({
   updateAppState: (sessionId, appName, appState) => {
     set((state) => {
       const existing = state.sessions[sessionId] ?? makeEmptySession()
+      const currentEntry = existing.apps[appName]
+      if (!currentEntry) return state
       return {
         sessions: {
           ...state.sessions,
           [sessionId]: {
             ...existing,
-            appStates: { ...existing.appStates, [appName]: appState },
+            apps: {
+              ...existing.apps,
+              [appName]: { ...currentEntry, context: appState as Record<string, unknown> },
+            },
           },
         },
       }
@@ -122,12 +170,24 @@ export const chatBridgeStore = create<ChatBridgeState>()((set, get) => ({
     return get().sessions[sessionId]?.active === true
   },
 
+  getActiveApp: (sessionId) => {
+    return get().sessions[sessionId]?.activeApp ?? null
+  },
+
   getAppContext: (sessionId) => {
     const session = get().sessions[sessionId]
     if (!session) return {}
+    const activeApp = session.activeApp
+    const previousApps = Object.entries(session.apps)
+      .filter(([name, entry]) => name !== activeApp && entry.status === 'suspended')
+      .map(([name]) => name)
+    if (!activeApp || !session.apps[activeApp]) {
+      return { activeApps: [], states: {}, previousApps }
+    }
     return {
-      activeApps: session.apps,
-      appStates: session.appStates,
+      activeApps: [activeApp],
+      states: { [activeApp]: session.apps[activeApp].context },
+      previousApps,
     }
   },
 

@@ -204,7 +204,7 @@ export async function generate(
                   void modifyMessage(sessionId, targetMsg, false, true)
                 },
                 onToolCall: async ({ toolCallId, toolName, params }) => {
-                  const activeAppName = chatBridgeStore.getState().sessions[sessionId]?.apps[0] ?? null
+                  const activeAppName = chatBridgeStore.getState().getActiveApp(sessionId)
                   const invoker = chatBridgeStore.getState().getToolInvoker(sessionId)
                   if (!invoker) {
                     console.error('[ChatBridge] No tool invoker — iframe not ready', { toolCallId, toolName })
