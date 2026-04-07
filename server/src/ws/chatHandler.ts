@@ -124,152 +124,32 @@ export function buildSystemPrompt(appContext?: AppContext): string {
   return prompt
 }
 
-export function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | undefined {
+interface ToolSchema {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+function convertToAnthropicTools(toolSchemas: unknown): Anthropic.Tool[] {
+  if (!Array.isArray(toolSchemas)) return []
+  return (toolSchemas as ToolSchema[]).map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.parameters as Anthropic.Tool.InputSchema,
+  }))
+}
+
+export async function getAnthropicTools(activeApps?: string[]): Promise<Anthropic.Tool[] | undefined> {
   // undefined means this is not a ChatBridge message — no tools needed
   if (!activeApps) return undefined
 
-  const allTools: Record<string, Anthropic.Tool[]> = {
-    'Test App': [
-      {
-        name: 'dummy_action',
-        description:
-          'A test tool that always succeeds. Call this when the user asks to use the test app or perform a dummy action.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            message: { type: 'string', description: 'A message to echo back' },
-          },
-        },
-      },
-    ],
-    Chess: [
-      {
-        name: 'start_game',
-        description:
-          'Start a new chess game. Call this when the user wants to play chess.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            color: {
-              type: 'string',
-              enum: ['white', 'black'],
-              description: 'The color the user wants to play as. Defaults to white.',
-            },
-          },
-        },
-      },
-      {
-        name: 'make_move',
-        description:
-          'Make a chess move on the board using square coordinates. Use this to make moves for the AI opponent or when the user asks you to move a piece.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            from: {
-              type: 'string',
-              description: 'Source square in algebraic notation, e.g. e2',
-            },
-            to: {
-              type: 'string',
-              description: 'Destination square in algebraic notation, e.g. e4',
-            },
-            promotion: {
-              type: 'string',
-              enum: ['q', 'r', 'b', 'n'],
-              description: 'Piece to promote to (only needed for pawn promotion)',
-            },
-          },
-          required: ['from', 'to'],
-        },
-      },
-      {
-        name: 'get_board_state',
-        description:
-          'Get the current chess board position, whose turn it is, and game status. Use this to analyze the position when the user asks for help or suggestions.',
-        input_schema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-    ],
-    Weather: [
-      {
-        name: 'get_current_weather',
-        description:
-          'Get the current weather conditions for a location. Returns temperature, humidity, wind speed, and description.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            location: {
-              type: 'string',
-              description: 'City name, e.g. "Tokyo", "New York", "London"',
-            },
-          },
-          required: ['location'],
-        },
-      },
-      {
-        name: 'get_forecast',
-        description: 'Get a multi-day weather forecast for a location.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            location: { type: 'string', description: 'City name' },
-            days: { type: 'number', description: 'Number of forecast days (default 4)' },
-          },
-          required: ['location'],
-        },
-      },
-    ],
-    Spotify: [
-      {
-        name: 'search_tracks',
-        description:
-          'Search for music tracks on Spotify. Returns track names, artists, album, and preview info. Use this to find songs before creating a playlist.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Search query, e.g. "jazz piano", "Miles Davis", "upbeat pop 2020"',
-            },
-            limit: {
-              type: 'number',
-              description: 'Maximum number of results to return (default 5, max 20)',
-            },
-          },
-          required: ['query'],
-        },
-      },
-      {
-        name: 'create_playlist',
-        description:
-          'Create a Spotify playlist and populate it with tracks. Searches for each track query and adds the best match. Requires Spotify to be connected first.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            name: {
-              type: 'string',
-              description: 'Playlist name, e.g. "Morning Jazz Vibes"',
-            },
-            description: {
-              type: 'string',
-              description: 'Optional playlist description',
-            },
-            trackQueries: {
-              type: 'array',
-              items: { type: 'string' },
-              description:
-                'Search queries for tracks to add, e.g. ["Miles Davis So What", "John Coltrane Giant Steps"]',
-            },
-          },
-          required: ['name', 'trackQueries'],
-        },
-      },
-    ],
-  }
+  const approvedApps = await prisma.appRegistration.findMany({
+    where: { status: 'approved' },
+    select: { name: true, toolSchemas: true },
+  })
 
-  const allAppNames = Object.keys(allTools)
+  const allAppNames = approvedApps.map((a) => a.name)
+
   const activateAppTool: Anthropic.Tool = {
     name: 'activate_app',
     description: `Activate or switch to a third-party application. Available apps: ${allAppNames.join(', ')}. Call this when the user wants to use a different app or switch to another app.`,
@@ -285,7 +165,8 @@ export function getAnthropicTools(activeApps?: string[]): Anthropic.Tool[] | und
     },
   }
 
-  const appTools = activeApps.flatMap((app) => allTools[app] ?? [])
+  const appToolMap = new Map(approvedApps.map((a) => [a.name, convertToAnthropicTools(a.toolSchemas)]))
+  const appTools = activeApps.flatMap((app) => appToolMap.get(app) ?? [])
   return [activateAppTool, ...appTools]
 }
 
@@ -396,7 +277,7 @@ async function streamWithToolLoop(
       if (toolUseBlocks[i].name === 'activate_app') {
         const result = results[i] as Record<string, unknown> | undefined
         if (result?.status === 'activated' && typeof result.app === 'string') {
-          effectiveTools = getAnthropicTools([result.app])
+          effectiveTools = await getAnthropicTools([result.app])
           effectiveSystemPrompt = buildSystemPrompt({
             activeApps: [result.app],
             states: {},
@@ -429,7 +310,7 @@ async function handleUserMessage(ws: WebSocket, msg: IncomingUserMessage, userId
   // loadHistory includes the user message we just persisted
   const history = await loadHistory(conversationId)
   const systemPrompt = buildSystemPrompt(appContext)
-  const tools = getAnthropicTools(appContext?.activeApps)
+  const tools = await getAnthropicTools(appContext?.activeApps)
 
   try {
     await streamWithToolLoop(ws, conversationId, history, systemPrompt, tools)

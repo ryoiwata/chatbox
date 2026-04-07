@@ -1,4 +1,57 @@
 import { buildSystemPrompt, getAnthropicTools } from '../ws/chatHandler'
+import { prisma } from '../lib/prisma'
+
+jest.mock('../lib/prisma', () => ({
+  prisma: {
+    appRegistration: {
+      findMany: jest.fn(),
+    },
+  },
+}))
+
+const mockFindMany = prisma.appRegistration.findMany as jest.Mock
+
+const MOCK_APPS = [
+  {
+    name: 'Test App',
+    toolSchemas: [
+      { name: 'dummy_action', description: 'A test tool', parameters: { type: 'object', properties: { message: { type: 'string' } } } },
+    ],
+  },
+  {
+    name: 'Chess',
+    toolSchemas: [
+      { name: 'start_game', description: 'Start a new chess game', parameters: { type: 'object', properties: { color: { type: 'string', enum: ['white', 'black'] } } } },
+      { name: 'make_move', description: 'Make a chess move', parameters: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] } },
+      { name: 'get_board_state', description: 'Get the current board position', parameters: { type: 'object', properties: {} } },
+    ],
+  },
+  {
+    name: 'Weather',
+    toolSchemas: [
+      { name: 'get_current_weather', description: 'Get current weather', parameters: { type: 'object', properties: { location: { type: 'string' } }, required: ['location'] } },
+      { name: 'get_forecast', description: 'Get forecast', parameters: { type: 'object', properties: { location: { type: 'string' }, days: { type: 'number' } }, required: ['location'] } },
+    ],
+  },
+  {
+    name: 'Spotify',
+    toolSchemas: [
+      { name: 'search_tracks', description: 'Search tracks', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+      { name: 'create_playlist', description: 'Create playlist', parameters: { type: 'object', properties: { name: { type: 'string' }, trackQueries: { type: 'array', items: { type: 'string' } } }, required: ['name', 'trackQueries'] } },
+    ],
+  },
+  {
+    name: 'Flashcards',
+    toolSchemas: [
+      { name: 'create_deck', description: 'Creates a flashcard deck', parameters: { type: 'object', properties: { topic: { type: 'string' }, cards: { type: 'array' } }, required: ['topic', 'cards'] } },
+      { name: 'show_card', description: 'Shows a card', parameters: { type: 'object', properties: { cardIndex: { type: 'number' }, side: { type: 'string' } }, required: ['cardIndex', 'side'] } },
+    ],
+  },
+]
+
+beforeEach(() => {
+  mockFindMany.mockResolvedValue(MOCK_APPS)
+})
 
 describe('buildSystemPrompt — multi-app switching', () => {
   it('includes only the active app state, not suspended apps', () => {
@@ -48,8 +101,8 @@ describe('buildSystemPrompt — multi-app switching', () => {
 })
 
 describe('getAnthropicTools — multi-app switching', () => {
-  it('always includes activate_app when activeApps is provided', () => {
-    const tools = getAnthropicTools(['Chess'])!
+  it('always includes activate_app when activeApps is provided', async () => {
+    const tools = (await getAnthropicTools(['Chess']))!
     const toolNames = tools.map((t) => t.name)
     expect(toolNames).toContain('activate_app')
 
@@ -60,8 +113,8 @@ describe('getAnthropicTools — multi-app switching', () => {
     expect(activateApp.description).toContain('Spotify')
   })
 
-  it('returns activate_app + active app tools when an app is active', () => {
-    const tools = getAnthropicTools(['Chess'])!
+  it('returns activate_app + active app tools when an app is active', async () => {
+    const tools = (await getAnthropicTools(['Chess']))!
     const toolNames = tools.map((t) => t.name)
 
     expect(toolNames).toContain('activate_app')
@@ -73,18 +126,18 @@ describe('getAnthropicTools — multi-app switching', () => {
     expect(toolNames).not.toContain('search_tracks')
   })
 
-  it('returns only activate_app when activeApps is empty', () => {
-    const tools = getAnthropicTools([])!
+  it('returns only activate_app when activeApps is empty', async () => {
+    const tools = (await getAnthropicTools([]))!
     expect(tools).toHaveLength(1)
     expect(tools[0].name).toBe('activate_app')
   })
 
-  it('returns undefined when activeApps is undefined (non-ChatBridge message)', () => {
-    expect(getAnthropicTools(undefined)).toBeUndefined()
+  it('returns undefined when activeApps is undefined (non-ChatBridge message)', async () => {
+    expect(await getAnthropicTools(undefined)).toBeUndefined()
   })
 
-  it('returns Weather tools + activate_app when Weather is active', () => {
-    const tools = getAnthropicTools(['Weather'])!
+  it('returns Weather tools + activate_app when Weather is active', async () => {
+    const tools = (await getAnthropicTools(['Weather']))!
     const toolNames = tools.map((t) => t.name)
 
     expect(toolNames).toContain('activate_app')
@@ -93,15 +146,25 @@ describe('getAnthropicTools — multi-app switching', () => {
     expect(toolNames).not.toContain('start_game')
   })
 
-  it('switches tools when active app changes (simulates activate_app flow)', () => {
+  it('returns Flashcards tools + activate_app when Flashcards is active', async () => {
+    const tools = (await getAnthropicTools(['Flashcards']))!
+    const toolNames = tools.map((t) => t.name)
+
+    expect(toolNames).toContain('activate_app')
+    expect(toolNames).toContain('create_deck')
+    expect(toolNames).toContain('show_card')
+    expect(toolNames).not.toContain('start_game')
+  })
+
+  it('switches tools when active app changes (simulates activate_app flow)', async () => {
     // Before: Chess is active
-    const chessTools = getAnthropicTools(['Chess'])!
+    const chessTools = (await getAnthropicTools(['Chess']))!
     const chessToolNames = chessTools.map((t) => t.name)
     expect(chessToolNames).toContain('start_game')
     expect(chessToolNames).not.toContain('get_current_weather')
 
     // After activate_app: Weather is now active
-    const weatherTools = getAnthropicTools(['Weather'])!
+    const weatherTools = (await getAnthropicTools(['Weather']))!
     const weatherToolNames = weatherTools.map((t) => t.name)
     expect(weatherToolNames).toContain('get_current_weather')
     expect(weatherToolNames).not.toContain('start_game')
