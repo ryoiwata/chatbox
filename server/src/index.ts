@@ -69,6 +69,7 @@ app.use('/apps/weather', express.static(path.join(__dirname, '../../apps/weather
 app.use('/apps/chess', express.static(path.join(__dirname, '../../apps/chess/dist')))
 app.use('/apps/spotify', express.static(path.join(__dirname, '../../apps/spotify/dist')))
 app.use('/apps/flashcards', express.static(path.join(__dirname, '../../apps/flashcards/dist')))
+app.use('/apps/whiteboard', express.static(path.join(__dirname, '../../apps/whiteboard/dist')))
 // Static: demo apps and built frontend (populated in later milestones)
 app.use('/apps', express.static(path.join(__dirname, '../../apps')))
 app.use(express.static(path.join(__dirname, '../../release/app/dist/renderer')))

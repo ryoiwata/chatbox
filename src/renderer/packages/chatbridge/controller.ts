@@ -214,6 +214,75 @@ const HARDCODED_FALLBACK_APPS: PluginManifest[] = [
     status: 'approved',
     authRequired: false,
   },
+  {
+    id: 'whiteboard',
+    name: 'Whiteboard',
+    url: '/apps/whiteboard',
+    description:
+      'Drawing canvas for students. Claude can set drawing prompts, capture drawings as images, and analyze stroke data.',
+    tools: [
+      {
+        name: 'clear_canvas',
+        description: 'Clears the drawing canvas',
+        parameters: {
+          type: 'object',
+          properties: {
+            backgroundColor: { type: 'string', description: 'Background color (defaults to white)' },
+          },
+        },
+      },
+      {
+        name: 'get_drawing',
+        description: 'Captures the current canvas as a base64 PNG data URL',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'get_strokes',
+        description: 'Returns the raw stroke data (coordinate arrays)',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'set_prompt',
+        description: 'Displays a drawing prompt/instruction to the student above the canvas',
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: 'The drawing prompt to display' },
+            timeLimit: { type: 'number', description: 'Optional countdown in seconds' },
+          },
+          required: ['prompt'],
+        },
+      },
+      {
+        name: 'undo_stroke',
+        description: 'Removes the last stroke from the canvas',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'set_tool',
+        description: 'Changes the drawing tool settings (color, width, or tool type)',
+        parameters: {
+          type: 'object',
+          properties: {
+            color: { type: 'string', description: 'Stroke color (CSS color)' },
+            width: { type: 'number', description: 'Stroke width in pixels' },
+            tool: { type: 'string', enum: ['pen', 'eraser'], description: 'Drawing tool type' },
+          },
+        },
+      },
+    ],
+    status: 'approved',
+    authRequired: false,
+  },
 ]
 
 export const chatBridgeController = {
